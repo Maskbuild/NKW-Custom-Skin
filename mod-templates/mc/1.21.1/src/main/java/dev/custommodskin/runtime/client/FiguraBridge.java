@@ -30,14 +30,16 @@ public final class FiguraBridge {
 
     public static Path avatarsDir() { return SkinMod.platform.gameDir().resolve("figura").resolve("avatars"); }
 
-    /** Names of the avatar folders (and .moon files) the player has in figura/avatars. */
+    /** Names of the avatar folders, .moon files, and .zip / .rar archives the player has in figura/avatars. */
     public static List<String> list() {
         List<String> out = new ArrayList<>();
         Path d = avatarsDir();
         if (!Files.isDirectory(d)) return out;
         try (Stream<Path> s = Files.list(d)) {
-            s.filter(p -> Files.isDirectory(p) || p.getFileName().toString().endsWith(".moon"))
-                    .map(p -> p.getFileName().toString()).filter(n -> !n.startsWith(".")).sorted(String.CASE_INSENSITIVE_ORDER).forEach(out::add);
+            s.filter(p -> {
+                String n = p.getFileName().toString().toLowerCase();
+                return Files.isDirectory(p) || n.endsWith(".moon") || n.endsWith(".zip") || n.endsWith(".rar");
+            }).map(p -> p.getFileName().toString()).filter(n -> !n.startsWith(".")).sorted(String.CASE_INSENSITIVE_ORDER).forEach(out::add);
         } catch (Exception e) {
             SkinMod.LOGGER.warn("Could not list Figura avatars", e);
         }
@@ -65,6 +67,20 @@ public final class FiguraBridge {
 
     public static boolean load(Path path, boolean upload) {
         if (!installed() || path == null) return false;
+        String lower = path.getFileName().toString().toLowerCase();
+        if (lower.endsWith(".zip") || lower.endsWith(".rar")) {
+            try {
+                Path resolved = FiguraZip.resolve(path);
+                if (resolved != null && Files.exists(resolved)) {
+                    path = resolved;
+                } else {
+                    return false;
+                }
+            } catch (Throwable t) {
+                SkinMod.LOGGER.warn("Could not unpack Figura archive {}", path, t);
+                return false;
+            }
+        }
         try {
             Class.forName(MANAGER).getMethod("loadLocalAvatar", Path.class).invoke(null, path);
             if (upload) pendingUpload = 20 * 15;
@@ -85,6 +101,14 @@ public final class FiguraBridge {
         Minecraft.getInstance().execute(() -> {
             Path last = current();
             if (last != null && Files.exists(last)) {
+                Path parent = last.getParent();
+                if (parent != null && parent.getFileName().toString().equals(".cache")) {
+                    Path src = avatarsDir().resolve(last.getFileName().toString());
+                    if (Files.exists(src)) {
+                        load(src, true);
+                        return;
+                    }
+                }
                 load(last, true); // a local avatar: rebuild it and upload it again
                 return;
             }

@@ -12,13 +12,6 @@ final class FileDialog {
         return pick("Choose a skin PNG", new String[] { "*.png" }, "PNG image");
     }
 
-    static String pickArchive() {
-        return pick("Choose a Figura avatar (.zip / .rar)", new String[] { "*.zip", "*.rar" }, "Archive (.zip, .rar)");
-    }
-
-    static String pickZip() {
-        return pickArchive();
-    }
 
     private static String pick(String title, String[] patterns, String description) {
         try (MemoryStack stack = MemoryStack.stackPush()) {

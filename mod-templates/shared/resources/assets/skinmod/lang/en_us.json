@@ -20,7 +20,7 @@
   "skinmod.figura_none": "Figura: current avatar",
   "skinmod.figura_set": "Figura: %s",
   "skinmod.figura_missing": "Figura: not installed",
-  "skinmod.figura_tip": "Pick a Figura avatar (a folder, a .zip or a .rar you add) that loads with this skin. Without one, your current Figura avatar stays. You can also drop a .zip or .rar on this window.",
+  "skinmod.figura_tip": "Pick a Figura avatar (folder, .moon, .zip or .rar in figura/avatars) that loads with this skin. Without one, your current Figura avatar stays.",
   "skinmod.figura_pick": "Figura avatar for this skin",
   "skinmod.figura_use_current": "None – keep my current avatar",
   "skinmod.figura_empty": "No avatars found in figura/avatars",
@@ -29,7 +29,5 @@
   "skinmod.talk_tip": "A second skin shown while you speak (Plasmo Voice), e.g. with an open mouth.",
   "skinmod.talk_tip_missing": "Plasmo Voice is not installed, so this skin will not show until it is.",
   "skinmod.reset": "Reset to my Minecraft skin",
-  "skinmod.reset_tip": "Stop using a custom skin. Everyone sees your normal Minecraft skin again.",
-  "skinmod.figura_zip": "Add .zip / .rar…",
-  "skinmod.figura_pick_outfit": "Select one of your own outfits first"
+  "skinmod.reset_tip": "Stop using a custom skin. Everyone sees your normal Minecraft skin again."
 }

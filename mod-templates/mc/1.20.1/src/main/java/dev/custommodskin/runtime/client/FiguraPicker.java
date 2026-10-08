@@ -24,8 +24,6 @@ public class FiguraPicker extends Screen {
         reload();
     }
 
-    private String status = "";
-
     private void reload() {
         names.clear();
         names.add(""); // "none"
@@ -39,20 +37,8 @@ public class FiguraPicker extends Screen {
 
     @Override
     protected void init() {
-        addRenderableWidget(Button.builder(Component.translatable("skinmod.figura_zip"), b -> {
-            String path = FileDialog.pickZip();
-            if (path == null) return;
-            try {
-                String name = FiguraZip.install(java.nio.file.Path.of(path));
-                Toasts.show("Figura avatar added", name);
-                parent.onFiguraPicked(outfit, name);
-            } catch (Exception e) {
-                status = e.getMessage();
-                reload();
-            }
-        }).bounds(width / 2 - 125, height - 34, 120, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> minecraft.setScreen(parent))
-                .bounds(width / 2 + 5, height - 34, 120, 20).build());
+                .bounds(width / 2 - 50, height - 34, 100, 20).build());
     }
 
     @Override
@@ -73,7 +59,6 @@ public class FiguraPicker extends Screen {
             g.drawString(font, font.plainSubstrByWidth(label, 220), x1() + 26, y + 5, n.isEmpty() ? 0xFF8C9199 : 0xFFFFFFFF);
         }
         g.disableScissor();
-        if (!status.isEmpty()) g.drawCenteredString(font, font.plainSubstrByWidth(status, width - 20), width / 2, y2() + 6, 0xFFFF6B6B);
         if (names.size() == 1) {
             g.drawCenteredString(font, Component.translatable("skinmod.figura_empty"), width / 2, y1() + 44, 0xFF8C9199);
         }

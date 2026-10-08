@@ -224,21 +224,7 @@ public class SkinScreen extends Screen {
     @Override
     public void onFilesDrop(List<Path> paths) {
         for (Path p : paths) {
-            String n = p.toString().toLowerCase();
-            if (n.endsWith(".png")) addFile(p);
-            else if (n.endsWith(".zip") || n.endsWith(".rar")) addFiguraZip(p);
-        }
-    }
-
-    /** A Figura avatar dropped on the window goes to the selected outfit. */
-    private void addFiguraZip(Path zip) {
-        if (!SkinConfig.figuraEnabled() || !FiguraBridge.installed()) { status = Component.translatable("skinmod.figura_missing").getString(); return; }
-        if (current == null || current.preset) { status = Component.translatable("skinmod.figura_pick_outfit").getString(); return; }
-        try {
-            onFiguraPicked(current, FiguraZip.install(zip));
-            Toasts.show("Figura avatar added", current.name);
-        } catch (Exception e) {
-            status = e.getMessage();
+            if (p.toString().toLowerCase().endsWith(".png")) addFile(p);
         }
     }
 
