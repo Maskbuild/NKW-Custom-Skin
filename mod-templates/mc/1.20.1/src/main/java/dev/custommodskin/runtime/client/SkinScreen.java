@@ -226,7 +226,7 @@ public class SkinScreen extends Screen {
         for (Path p : paths) {
             String n = p.toString().toLowerCase();
             if (n.endsWith(".png")) addFile(p);
-            else if (n.endsWith(".zip")) addFiguraZip(p);
+            else if (n.endsWith(".zip") || n.endsWith(".rar")) addFiguraZip(p);
         }
     }
 

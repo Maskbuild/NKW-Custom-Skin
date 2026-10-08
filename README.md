@@ -7,7 +7,7 @@ A node-based launcher that builds a **Minecraft Java mod with HD skin support** 
 - Preset skins shipped inside the mod
 - Skin zones: a creative-only block that marks an area where players can change skin (you see it as a green block while holding it)
 - Skin blocks: right-click a game block (a crafting table, a mod block …) or a block of your own to open the wardrobe; a message shows while you look at it
-- Optional **Figura** avatar per outfit (a folder or a `.zip`, shown with the Figura logo) and **Plasmo Voice** talking skin (neither is required). Figura models that use the player skin get the HD skin too
+- Optional **Figura** avatar per outfit (a folder, a `.zip` or a `.rar`, shown with the Figura logo) and **Plasmo Voice** talking skin (neither is required). Figura models that use the player skin get the HD skin too
 - Browse blocks, items, models and textures of Minecraft and of any mod, and import them into your project
 
 ## Download
