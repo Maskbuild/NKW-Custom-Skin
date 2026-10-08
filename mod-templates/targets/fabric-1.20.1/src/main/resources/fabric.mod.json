@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "${mod_id}",
+  "version": "${mod_version}",
+  "name": "${mod_name}",
+  "description": "${mod_description}",
+  "environment": "*",
+  "icon": "assets/skinmod/icon.png",
+  "entrypoints": {
+    "main": ["dev.custommodskin.runtime.fabric.SkinModFabric"],
+    "client": ["dev.custommodskin.runtime.fabric.SkinModFabricClient"]
+  },
+  "mixins": [{ "config": "skinmod.mixins.json", "environment": "client" }],
+  "depends": { "fabricloader": ">=0.14.21", "minecraft": "~1.20.1", "fabric-api": "*" },
+  "suggests": { "figura": "*", "plasmovoice": "*" }
+}

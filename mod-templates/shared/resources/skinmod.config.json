@@ -1,0 +1,11 @@
+{
+  "maxSkins": 10,
+  "key": {
+    "enabled": true,
+    "default": "K"
+  },
+  "block": {
+    "enabled": false,
+    "name": "Skin Station"
+  }
+}

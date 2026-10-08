@@ -1,0 +1,98 @@
+buildscript {
+    repositories {
+        maven { url = 'https://maven.minecraftforge.net' }
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.spongepowered:mixingradle:0.7.+'
+    }
+}
+
+plugins {
+    id 'java'
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+}
+
+apply plugin: 'org.spongepowered.mixin'
+
+version = project.mod_version
+group = project.maven_group
+base { archivesName = project.archives_base_name }
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(Integer.parseInt(project.java_version))
+
+mixin {
+    add sourceSets.main, 'skinmod.refmap.json'
+    config 'skinmod.mixins.json'
+}
+
+minecraft {
+    mappings channel: 'official', version: project.minecraft_version
+
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'info'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+            mods {
+                "${project.mod_id}" {
+                    source sourceSets.main
+                }
+            }
+        }
+        client {}
+        server {
+            args '--nogui'
+        }
+    }
+}
+
+repositories {
+    maven { url = 'https://repo.plasmoverse.com/releases' } // Plasmo Voice API (optional, compile only)
+    exclusiveContent { // mods for test runs only (never packed into the jar)
+        forRepository { maven { url = 'https://api.modrinth.com/maven' } }
+        filter { includeGroup 'maven.modrinth' }
+    }
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}"
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    compileOnly "su.plo.voice.api:client:2.1.17"
+
+    // Test runs (runClient): Figura / Plasmo Voice when the launcher ticks them.
+    if (project.findProperty('test_figura') == 'true') runtimeOnly fg.deobf("maven.modrinth:figura:${project.test_figura_version}")
+    if (project.findProperty('test_plasmo') == 'true') runtimeOnly fg.deobf("maven.modrinth:plasmo-voice:${project.test_plasmo_version}")
+}
+
+processResources {
+    filteringCharset = 'UTF-8'
+    def props = [mod_id: project.mod_id, mod_name: project.mod_name,
+                 mod_version: project.mod_version, mod_description: project.mod_description,
+                 minecraft_version: project.minecraft_version, pack_format: project.pack_format]
+    inputs.properties props
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) { expand props }
+}
+
+jar {
+    manifest {
+        attributes([
+                'Specification-Title'   : project.mod_id,
+                'Specification-Version' : '1',
+                'Implementation-Title'  : project.name,
+                'Implementation-Version': project.jar.archiveVersion
+        ])
+    }
+    finalizedBy 'reobfJar'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+java {
+    withSourcesJar()
+}

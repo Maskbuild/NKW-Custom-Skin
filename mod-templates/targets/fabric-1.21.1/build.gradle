@@ -1,0 +1,52 @@
+plugins {
+    id 'fabric-loom' version '1.15.5'
+}
+
+version = project.mod_version
+group = project.maven_group
+base { archivesName = project.archives_base_name }
+
+repositories {
+    maven { url = 'https://repo.plasmoverse.com/releases' } // Plasmo Voice API (optional, compile only)
+    maven { url = 'https://jitpack.io' }                    // Figura libraries (test runs only)
+    exclusiveContent { // mods for test runs only (never packed into the jar)
+        forRepository { maven { url = 'https://api.modrinth.com/maven' } }
+        filter { includeGroup 'maven.modrinth' }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    compileOnly "su.plo.voice.api:client:2.1.17"
+
+    // Test runs (runClient): Mod Menu always; Figura / Plasmo Voice when the launcher ticks them.
+    modLocalRuntime "maven.modrinth:modmenu:${project.test_modmenu}"
+    modLocalRuntime "maven.modrinth:placeholder-api:${project.test_placeholder_api}"
+    if (project.findProperty('test_figura') == 'true') {
+        modLocalRuntime "maven.modrinth:figura:${project.test_figura_version}"
+        // Figura carries these inside its jar, but Loom does not load nested plain libraries in dev
+        runtimeOnly "com.github.FiguraMC.luaj:luaj-core:3.0.8-figura"
+        runtimeOnly "com.github.FiguraMC.luaj:luaj-jse:3.0.8-figura"
+        runtimeOnly "com.neovisionaries:nv-websocket-client:2.14"
+    }
+    if (project.findProperty('test_plasmo') == 'true') modLocalRuntime "maven.modrinth:plasmo-voice:${project.test_plasmo_version}"
+}
+
+processResources {
+    filteringCharset = 'UTF-8'
+    def props = [mod_id: project.mod_id, mod_name: project.mod_name,
+                 mod_version: project.mod_version, mod_description: project.mod_description]
+    inputs.properties props
+    filesMatching('fabric.mod.json') { expand props }
+}
+
+tasks.withType(JavaCompile).configureEach { it.options.release = Integer.parseInt(project.java_version) }
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.toVersion(project.java_version)
+    targetCompatibility = JavaVersion.toVersion(project.java_version)
+}

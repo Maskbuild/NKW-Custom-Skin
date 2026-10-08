@@ -1,0 +1,65 @@
+plugins {
+    id 'java'
+    id 'net.minecraftforge.gradle' version '[7.0.3,8)'
+}
+
+version = project.mod_version
+group = project.maven_group
+base { archivesName = project.archives_base_name }
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(Integer.parseInt(project.java_version))
+
+minecraft {
+    mappings channel: 'official', version: project.minecraft_version
+
+    runs {
+        configureEach {
+            workingDir = layout.projectDirectory.dir('run')
+        }
+        register('client')
+        register('server') {
+            args '--nogui'
+        }
+    }
+}
+
+repositories {
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+    mavenCentral()
+    maven { url = 'https://repo.spongepowered.org/repository/maven-public/' } // Mixin (compile only)
+    maven { url = 'https://repo.plasmoverse.com/releases' }                   // Plasmo Voice API (optional, compile only)
+    maven { url = 'https://jitpack.io' }                                      // Figura libraries (test runs only)
+    exclusiveContent { // mods for test runs only (never packed into the jar)
+        forRepository { maven { url = 'https://api.modrinth.com/maven' } }
+        filter { includeGroup 'maven.modrinth' }
+    }
+}
+
+dependencies {
+    implementation minecraft.dependency("net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}")
+    compileOnly "org.spongepowered:mixin:0.8.5"
+    compileOnly "su.plo.voice.api:client:2.1.17"
+
+    // Test runs (runClient): Figura / Plasmo Voice when the launcher ticks them.
+    if (project.findProperty("test_figura") == "true") runtimeOnly "maven.modrinth:figura:${project.test_figura_version}"
+    if (project.findProperty("test_plasmo") == "true" && project.test_plasmo_version) runtimeOnly "maven.modrinth:plasmo-voice:${project.test_plasmo_version}"
+}
+
+processResources {
+    filteringCharset = 'UTF-8'
+    def props = [mod_id: project.mod_id, mod_name: project.mod_name,
+                 mod_version: project.mod_version, mod_description: project.mod_description,
+                 minecraft_version: project.minecraft_version, pack_format: project.pack_format]
+    inputs.properties props
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) { expand props }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+java {
+    withSourcesJar()
+}
