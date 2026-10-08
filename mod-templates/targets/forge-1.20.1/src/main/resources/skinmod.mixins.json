@@ -5,7 +5,8 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "skinmod.refmap.json",
   "client": [
-    "AbstractClientPlayerMixin"
+    "AbstractClientPlayerMixin",
+    "PlayerInfoMixin"
   ],
   "injectors": {
     "defaultRequire": 1

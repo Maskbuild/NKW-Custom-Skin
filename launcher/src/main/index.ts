@@ -7,7 +7,7 @@ import { commit, createProject, history, listFiles, readProject, restore, writeP
 import { dataUrl, importInto, pngInfo } from './assets'
 import { loadSettings, rememberProject, saveSettings } from './settings'
 import { searchModrinth } from './modrinth'
-import { addModrinthMod, copyModFile, downloadMinecraft, importAssets, listAssets, listSources, minecraftInfo, thumbnails } from './gameAssets'
+import { addModrinthMod, blockFaces, copyModFile, downloadMinecraft, importAssets, listAssets, listSources, minecraftInfo, thumbnails } from './gameAssets'
 import { ProjectSchema } from '../shared/schema'
 import type { ExportRequest, ModrinthQuery, OpenedProject } from '../shared/ipc'
 
@@ -176,6 +176,7 @@ function registerIpc(): void {
   })
   ipcMain.handle('assets:list', (_e, dir: string, id: string) => listAssets(allow(dir), String(id)))
   ipcMain.handle('assets:thumbs', (_e, dir: string, id: string, paths: string[]) => thumbnails(allow(dir), String(id), Array.isArray(paths) ? paths.map(String) : []))
+  ipcMain.handle('assets:blockFaces', (_e, dir: string, id: string, mc: string, names: string[]) => blockFaces(allow(dir), String(id), String(mc), Array.isArray(names) ? names.map(String) : []))
   ipcMain.handle('assets:import', (_e, dir: string, id: string, paths: string[]) => importAssets(allow(dir), String(id), Array.isArray(paths) ? paths.map(String) : []))
 
   ipcMain.handle('modrinth:search', (_e, q: ModrinthQuery) => searchModrinth(q))

@@ -11,6 +11,4 @@ public final class ClientNet {
     public static void onDownload(Messages.Download m) { ClientSkins.onDownload(m); }
 
     public static void onSpeakState(Messages.SpeakState m) { ClientSkins.onSpeakState(m); }
-
-    public static void onZoneState(Messages.ZoneState m) { ZoneClient.setInside(m.inside()); }
 }

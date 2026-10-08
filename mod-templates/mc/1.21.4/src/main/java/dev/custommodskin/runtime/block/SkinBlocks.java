@@ -4,6 +4,7 @@ import com.mojang.serialization.MapCodec;
 import dev.custommodskin.runtime.SkinConfig;
 import dev.custommodskin.runtime.SkinMod;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -28,6 +29,10 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /** The optional blocks: the skin station (opens the wardrobe) and the skin zone marker (creative only). */
@@ -40,6 +45,13 @@ public final class SkinBlocks {
     public static Item STATION_ITEM;
     public static Item ZONE_ITEM;
     public static BlockEntityType<ZoneBlockEntity> ZONE_BE;
+
+    /** A block of our own that opens the wardrobe (a Block node with "make my own block"). */
+    public record Custom(ResourceLocation id, Block block, Item item) {}
+
+    public static final List<Custom> CUSTOM = new ArrayList<>();
+    /** Game blocks that open the wardrobe when right-clicked, for example minecraft:crafting_table. */
+    public static final Set<ResourceLocation> VANILLA = new HashSet<>();
 
     /** Set by the client side; the common block code only calls these on the logical client. */
     public static Runnable openWardrobe = () -> {};
@@ -56,7 +68,7 @@ public final class SkinBlocks {
     public static void create() {
         if (created) return;
         created = true;
-        if (SkinConfig.blockEnabled()) {
+        if (SkinConfig.builtinStation()) {
             STATION = new StationBlock(BlockBehaviour.Properties.of().setId(ResourceKey.create(Registries.BLOCK, STATION_ID)).strength(2.0f).sound(SoundType.WOOD));
             STATION_ITEM = new BlockItem(STATION, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, STATION_ID)).useBlockDescriptionPrefix());
         }
@@ -66,6 +78,33 @@ public final class SkinBlocks {
             ZONE_ITEM = new ZoneItem(ZONE, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, ZONE_ID)).useBlockDescriptionPrefix());
             ZONE_BE = SkinMod.platform.blockEntityType(ZoneBlockEntity::new, ZONE);
         }
+        for (SkinConfig.BlockEntry e : SkinConfig.blocks()) {
+            if (e.vanilla().isEmpty()) {
+                ResourceLocation id = SkinMod.id(e.id());
+                Block b = new StationBlock(BlockBehaviour.Properties.of().setId(ResourceKey.create(Registries.BLOCK, id)).strength(2.0f).sound(SoundType.WOOD));
+                CUSTOM.add(new Custom(id, b, new BlockItem(b, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id)).useBlockDescriptionPrefix())));
+            } else {
+                ResourceLocation rl = ResourceLocation.tryParse(e.vanilla());
+                if (rl != null) VANILLA.add(rl);
+            }
+        }
+    }
+
+    /** Is this one of the blocks that open the wardrobe (ours, or a game block chosen in the launcher)? */
+    public static boolean isSkinBlock(BlockState state) {
+        return state.getBlock() instanceof StationBlock || (!VANILLA.isEmpty() && VANILLA.contains(BuiltInRegistries.BLOCK.getKey(state.getBlock())));
+    }
+
+    /**
+     * Right-click on a game block that was turned into a skin block. Called on both sides: the client opens the
+     * window, and both sides swallow the click so the block's own screen (a crafting table, say) does not open too.
+     * Sneaking still places blocks as usual.
+     */
+    public static boolean handleUse(Level level, Player player, BlockPos pos) {
+        if (VANILLA.isEmpty() || player.isShiftKeyDown()) return false;
+        if (!VANILLA.contains(BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock()))) return false;
+        if (level.isClientSide) openWardrobe.run();
+        return true;
     }
 
     static final class StationBlock extends Block {

@@ -4,6 +4,8 @@ import { LOADERS, LOADER_LABEL, MC_VERSIONS, isTargetSupported, toModId, type Lo
 import { useStore } from '../store'
 import { useL, useT } from '../i18n'
 import type { FileNode } from '../../shared/ipc'
+import { useDataUrl } from '../useDataUrl'
+import { BlockCube } from '../components/BlockCube'
 
 export function Inspector(): React.JSX.Element {
   const selected = useStore((s) => s.selected)
@@ -84,17 +86,6 @@ function LogoPreview({ dir, rel }: { dir: string; rel?: string }): React.JSX.Ele
   return url ? <img className="thumb pixel" src={url} alt="" /> : <span className="thumb empty-thumb" />
 }
 
-function useDataUrl(dir: string, rel?: string): string | null {
-  const [url, setUrl] = useState<string | null>(null)
-  useEffect(() => {
-    let live = true
-    setUrl(null)
-    if (rel) void window.api.assetDataUrl(dir, rel).then((u) => live && setUrl(u))
-    return () => { live = false }
-  }, [dir, rel])
-  return url
-}
-
 function NodeProps({ id }: { id: string }): React.JSX.Element | null {
   const L = useL()
   const t = useT()
@@ -109,6 +100,7 @@ function NodeProps({ id }: { id: string }): React.JSX.Element | null {
       <h3>{def.icon} {L(def.title)}</h3>
       <p className="muted">{L(def.description)}</p>
       {!def.available && <p className="err">{t('insp.notReady')}</p>}
+      {node.type === 'gameItem' && <ItemPreview data={node.data} />}
       {def.props.filter((p) => propVisible(def, p, node.data)).map((p) => (
         <Prop key={p.key} def={def} p={p} value={valueOf(def, node.data, p.key)} onChange={(v) => update(id, { [p.key]: v })} />
       ))}
@@ -116,6 +108,15 @@ function NodeProps({ id }: { id: string }): React.JSX.Element | null {
       <NodeActions ids={[id]} />
     </>
   )
+}
+
+/** The block or item as the game shows it, larger, above the settings. */
+function ItemPreview({ data }: { data: Record<string, unknown> }): React.JSX.Element | null {
+  const dir = useStore((s) => s.dir)!
+  const side = useDataUrl(dir, typeof data.texture === 'string' ? data.texture : undefined)
+  const top = useDataUrl(dir, typeof data.textureTop === 'string' ? data.textureTop : undefined)
+  if (!side && !top) return null
+  return <div className="insp-preview">{data.kind === 'item' ? <img className="pixel" src={side ?? undefined} alt="" /> : <BlockCube top={top} side={side} size={96} />}</div>
 }
 
 function Prop({ p, value, onChange }: { def: NodeDef; p: PropDef; value: unknown; onChange: (v: string | number | boolean) => void }): React.JSX.Element {

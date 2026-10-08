@@ -82,7 +82,10 @@ export interface Api {
   addModrinth(slug: string): Promise<string>
   listAssets(dir: string, sourceId: string): Promise<AssetEntry[]>
   thumbnails(dir: string, sourceId: string, paths: string[]): Promise<Record<string, string>>
-  importAssets(dir: string, sourceId: string, paths: string[]): Promise<string[]>
+  /** the top and side textures of blocks (from their block state / model), for a 3D preview and for importing them */
+  blockFaces(dir: string, sourceId: string, mc: string, names: string[]): Promise<Record<string, BlockFaces>>
+  /** copies jar entries into the project; returns entry -> project path */
+  importAssets(dir: string, sourceId: string, paths: string[]): Promise<Record<string, string>>
   onDownloadProgress(cb: (p: DownloadProgress) => void): () => void
   /** absolute path of a dropped File (Electron removed File.path) */
   pathOf(file: File): string
@@ -127,7 +130,8 @@ export interface AssetEntry {
   /** entry name inside the jar */
   path: string
   ns: string
-  kind: 'texture' | 'model'
+  /** 'block' = a block (its block state file); the others are files of the same name */
+  kind: 'block' | 'texture' | 'model'
   group: 'block' | 'item'
   name: string
 }
@@ -136,4 +140,16 @@ export interface DownloadProgress {
   what: string
   done: number
   total: number
+}
+
+/** A texture inside one of the sources, with a data URL to draw it. */
+export interface FaceRef {
+  src: string
+  path: string
+  url: string
+}
+
+export interface BlockFaces {
+  top?: FaceRef
+  side?: FaceRef
 }

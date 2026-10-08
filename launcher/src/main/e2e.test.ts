@@ -36,6 +36,10 @@ describe.skipIf(!target || !out)('e2e render', () => {
     p.nodes.push({ id: 'f1', type: 'figura', position: { x: 0, y: 0 }, data: {} })
     p.nodes.push({ id: 'v1', type: 'plasmoVoice', position: { x: 0, y: 0 }, data: {} })
     p.edges.push({ id: 'e', source: 's1', sourceHandle: 'skin', target: 'wardrobe-1', targetHandle: 'skins' })
+    // one game block and one block of our own open the window
+    p.nodes.push({ id: 'b1', type: 'gameItem', position: { x: 0, y: 0 }, data: { kind: 'block', gameId: 'minecraft:crafting_table' } })
+    p.nodes.push({ id: 'b2', type: 'gameItem', position: { x: 0, y: 0 }, data: { kind: 'block', custom: true, name: 'Dressing Crate', texture: 'textures/hero.png', textureTop: 'textures/hero.png' } })
+    for (const id of ['b1', 'b2']) p.edges.push({ id: 'e' + id, source: id, sourceHandle: 'block', target: 'wardrobe-1', targetHandle: 'blocks' })
     renderProject(p, proj, out!)
   })
 })

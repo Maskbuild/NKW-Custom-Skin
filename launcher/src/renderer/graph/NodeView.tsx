@@ -1,8 +1,10 @@
 import { memo, useCallback, useEffect, type CSSProperties } from 'react'
 import { Handle, Position, useUpdateNodeInternals, type NodeProps } from '@xyflow/react'
-import { CATEGORIES, NODE_DEF_MAP, PIN_COLORS, valueOf, type PinDef } from '../../shared/nodes'
+import { CATEGORIES, NODE_DEF_MAP, PIN_COLORS, pinVisible, valueOf, type PinDef } from '../../shared/nodes'
 import { useStore } from '../store'
 import { useL, useT } from '../i18n'
+import { useDataUrl } from '../useDataUrl'
+import { BlockCube } from '../components/BlockCube'
 
 function Pin({ nodeId, pin, dir, on }: { nodeId: string; pin: PinDef; dir: 'in' | 'out'; on: boolean }): React.JSX.Element {
   const L = useL()
@@ -37,16 +39,31 @@ function summary(type: string, data: Record<string, unknown>): string {
   const v = (k: string): unknown => valueOf(def, data, k)
   switch (type) {
     case 'skinWardrobe': {
-      const how = [v('keyEnabled') ? `⌨ ${String(v('key'))}` : '', v('blockEnabled') ? '🧱' : ''].filter(Boolean).join(' · ')
+      const how = [v('keyEnabled') && !v('blockEnabled') ? `⌨ ${String(v('key'))}` : '', v('blockEnabled') ? '🧱' : ''].filter(Boolean).join(' · ')
       return `${how || '—'} · ${v('unlimited') ? '∞' : String(v('maxSkins'))}`
     }
     case 'skin':
       return `${String(v('id'))}${data.file ? ` · ${String(data.file).split('/').pop()}` : ''}`
     case 'skinZone':
       return `${String(v('mode'))} · ${String(v('width'))}×${String(v('length'))}×${String(v('height'))}`
+    case 'gameItem':
+      return v('custom') ? `${String(v('name'))} (new)` : String(v('gameId'))
     default:
       return ''
   }
+}
+
+/** The block or item of a Block / item node, drawn like the game draws it. */
+function ItemPreview({ data }: { data: Record<string, unknown> }): React.JSX.Element | null {
+  const dir = useStore((s) => s.dir)!
+  const side = useDataUrl(dir, typeof data.texture === 'string' ? data.texture : undefined)
+  const top = useDataUrl(dir, typeof data.textureTop === 'string' ? data.textureTop : undefined)
+  if (!side && !top) return null
+  return (
+    <div className="nk-preview">
+      {data.kind === 'item' ? <img className="pixel" src={side ?? undefined} alt="" draggable={false} /> : <BlockCube top={top} side={side} size={54} />}
+    </div>
+  )
 }
 
 export const NodeView = memo(function NodeView({ id, selected }: NodeProps): React.JSX.Element {
@@ -66,12 +83,15 @@ export const NodeView = memo(function NodeView({ id, selected }: NodeProps): Rea
   const t = useT()
   const L = useL()
   const update = useUpdateNodeInternals()
-  useEffect(() => update(id), [id, update])
-
   const def = node ? NODE_DEF_MAP[node.type] : undefined
+  // pins can appear and disappear with the node's settings, so React Flow has to measure the handles again
+  const inputs = def && node ? def.inputs.filter((p) => pinVisible(def, p, node.data)) : []
+  const pinKey = inputs.map((p) => p.id).join(',')
+  useEffect(() => update(id), [id, update, pinKey])
+
   if (!node || !def) return <div className="nk missing">?</div>
   const on = new Set(connected ? connected.split('|') : [])
-  const rows = Math.max(def.inputs.length, def.outputs.length)
+  const rows = Math.max(inputs.length, def.outputs.length)
   const sub = summary(node.type, node.data)
 
   return (
@@ -82,12 +102,13 @@ export const NodeView = memo(function NodeView({ id, selected }: NodeProps): Rea
         <span className="nk-title ellipsis">{L(def.title)}</span>
         {node.disabled && <span className="nk-off">{t('ws.disabled')}</span>}
       </div>
+      {node.type === 'gameItem' && <ItemPreview data={node.data} />}
       {sub && <div className="nk-sub mono ellipsis">{sub}</div>}
       {rows > 0 && (
         <div className="nk-pins">
           {Array.from({ length: rows }, (_, i) => (
             <div className="nk-row" key={i}>
-              {def.inputs[i] ? <Pin nodeId={id} pin={def.inputs[i]} dir="in" on={on.has(`i:${def.inputs[i].id}`)} /> : <span />}
+              {inputs[i] ? <Pin nodeId={id} pin={inputs[i]} dir="in" on={on.has(`i:${inputs[i].id}`)} /> : <span />}
               {def.outputs[i] ? <Pin nodeId={id} pin={def.outputs[i]} dir="out" on={on.has(`o:${def.outputs[i].id}`)} /> : <span />}
             </div>
           ))}

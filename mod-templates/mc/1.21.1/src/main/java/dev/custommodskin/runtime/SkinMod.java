@@ -16,7 +16,12 @@ public final class SkinMod {
     private SkinMod() {}
 
     public static ResourceLocation id(String path) {
-        return ResourceLocation.fromNamespaceAndPath(ID, path);
+        return rl(ID, path);
+    }
+
+    /** A resource location of any namespace (for example Figura's own icon). */
+    public static ResourceLocation rl(String namespace, String path) {
+        return ResourceLocation.fromNamespaceAndPath(namespace, path);
     }
 
     public static void init(Platform p) {

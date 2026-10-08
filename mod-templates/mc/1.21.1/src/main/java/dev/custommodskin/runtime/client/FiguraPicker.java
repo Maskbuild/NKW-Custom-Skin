@@ -21,6 +21,13 @@ public class FiguraPicker extends Screen {
         super(Component.translatable("skinmod.figura_pick"));
         this.parent = parent;
         this.outfit = outfit;
+        reload();
+    }
+
+    private String status = "";
+
+    private void reload() {
+        names.clear();
         names.add(""); // "none"
         names.addAll(FiguraBridge.list());
     }
@@ -32,8 +39,20 @@ public class FiguraPicker extends Screen {
 
     @Override
     protected void init() {
+        addRenderableWidget(Button.builder(Component.translatable("skinmod.figura_zip"), b -> {
+            String path = FileDialog.pickZip();
+            if (path == null) return;
+            try {
+                String name = FiguraZip.install(java.nio.file.Path.of(path));
+                Toasts.show("Figura avatar added", name);
+                parent.onFiguraPicked(outfit, name);
+            } catch (Exception e) {
+                status = e.getMessage();
+                reload();
+            }
+        }).bounds(width / 2 - 125, height - 34, 120, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> minecraft.setScreen(parent))
-                .bounds(width / 2 - 50, height - 34, 100, 20).build());
+                .bounds(width / 2 + 5, height - 34, 120, 20).build());
     }
 
     @Override
@@ -48,11 +67,12 @@ public class FiguraPicker extends Screen {
             boolean sel = n.equals(outfit.figura);
             boolean hover = mouseX >= x1() && mouseX < x2() && mouseY >= y && mouseY < y + ROW_H - 2 && mouseY < y2();
             g.fill(x1() + 4, y, x2() - 4, y + ROW_H - 2, sel ? 0xCC3A7BD5 : hover ? 0x33FFFFFF : 0x1AFFFFFF);
-            if (!n.isEmpty()) Gfx.blit(g, SkinScreen.FIGURA_ICON, x1() + 8, y + 3, 12, 12, 0, 0, 16, 16, 16, 16);
+            if (!n.isEmpty()) SkinScreen.drawFiguraIcon(g, x1() + 8, y + 3, 12);
             String label = n.isEmpty() ? Component.translatable("skinmod.figura_use_current").getString() : n;
             g.drawString(font, font.plainSubstrByWidth(label, 220), x1() + 26, y + 5, n.isEmpty() ? 0xFF8C9199 : 0xFFFFFFFF);
         }
         g.disableScissor();
+        if (!status.isEmpty()) g.drawCenteredString(font, font.plainSubstrByWidth(status, width - 20), width / 2, y2() + 6, 0xFFFF6B6B);
         if (names.size() == 1) {
             g.drawCenteredString(font, Component.translatable("skinmod.figura_empty"), width / 2, y1() + 44, 0xFF8C9199);
         }

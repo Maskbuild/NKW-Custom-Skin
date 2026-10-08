@@ -3,7 +3,7 @@ import { spawn, execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { isTargetSupported, migrateProject, type Project } from '../shared/schema'
-import { buildRuntimeConfig, collectPresets, stationTexture } from '../shared/config'
+import { buildRuntimeConfig, collectBlocks, collectPresets, stationTexture } from '../shared/config'
 import { assetFiles } from '../shared/nodes'
 import { validate } from '../shared/validate'
 import { inside, pngInfo } from './assets'
@@ -126,6 +126,37 @@ export function renderProject(project: Project, projectDir: string, workDir: str
   const lang = JSON.parse(fs.readFileSync(langFile, 'utf8')) as Record<string, string>
   lang['block.skinmod.skin_station'] = buildRuntimeConfig(project).block.name
   fs.writeFileSync(langFile, JSON.stringify(lang, null, 2))
+
+  // blocks of our own (Block nodes with "make my own block"): state, model, item model, texture, lang, loot table
+  const asset = path.join(res, 'assets', 'skinmod')
+  const writeJson = (file: string, data: unknown): void => {
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, JSON.stringify(data, null, 2))
+  }
+  const blockNames: Record<string, string> = {}
+  for (const b of collectBlocks(project).filter((x) => !x.vanilla)) {
+    fs.mkdirSync(path.join(asset, 'textures', 'block'), { recursive: true })
+    fs.copyFileSync(inside(projectDir, b.texture), path.join(asset, 'textures', 'block', `${b.id}.png`))
+    const hasTop = !!b.textureTop && fs.existsSync(inside(projectDir, b.textureTop))
+    if (hasTop) fs.copyFileSync(inside(projectDir, b.textureTop), path.join(asset, 'textures', 'block', `${b.id}_top.png`))
+    writeJson(path.join(asset, 'blockstates', `${b.id}.json`), { variants: { '': { model: `skinmod:block/${b.id}` } } })
+    writeJson(
+      path.join(asset, 'models', 'block', `${b.id}.json`),
+      hasTop
+        ? { parent: 'minecraft:block/cube_column', textures: { end: `skinmod:block/${b.id}_top`, side: `skinmod:block/${b.id}` } }
+        : { parent: 'minecraft:block/cube_all', textures: { all: `skinmod:block/${b.id}` } }
+    )
+    writeJson(path.join(asset, 'models', 'item', `${b.id}.json`), { parent: `skinmod:block/${b.id}` })
+    writeJson(path.join(asset, 'items', `${b.id}.json`), { model: { type: 'minecraft:model', model: `skinmod:block/${b.id}` } }) // 1.21.2+
+    blockNames[`block.skinmod.${b.id}`] = b.name
+    const loot = { type: 'minecraft:block', pools: [{ rolls: 1, entries: [{ type: 'minecraft:item', name: `skinmod:${b.id}` }], conditions: [{ condition: 'minecraft:survives_explosion' }] }] }
+    writeJson(path.join(res, 'data', 'skinmod', 'loot_table', 'blocks', `${b.id}.json`), loot) // 1.21+
+    writeJson(path.join(res, 'data', 'skinmod', 'loot_tables', 'blocks', `${b.id}.json`), loot) // 1.20.1
+  }
+  if (Object.keys(blockNames).length) {
+    const names = JSON.parse(fs.readFileSync(langFile, 'utf8')) as Record<string, string>
+    fs.writeFileSync(langFile, JSON.stringify({ ...names, ...blockNames }, null, 2))
+  }
 
   // a texture from the project (for example one taken from the game) replaces the station block look
   const station = stationTexture(project)

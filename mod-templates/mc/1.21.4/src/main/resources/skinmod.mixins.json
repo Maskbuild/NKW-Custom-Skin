@@ -4,7 +4,8 @@
   "package": "dev.custommodskin.runtime.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "AbstractClientPlayerMixin"
+    "AbstractClientPlayerMixin",
+    "PlayerInfoMixin"
   ],
   "injectors": {
     "defaultRequire": 1

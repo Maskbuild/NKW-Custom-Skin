@@ -2,6 +2,7 @@ package dev.custommodskin.runtime.client;
 
 import dev.custommodskin.runtime.SkinConfig;
 import dev.custommodskin.runtime.SkinMod;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -20,6 +21,9 @@ import java.util.List;
 /** Wardrobe window: outfit list | big rotatable preview | name + actions. Vanilla blurs what is behind it. */
 public class SkinScreen extends Screen {
     static final ResourceLocation FIGURA_ICON = SkinMod.id("textures/gui/figura.png");
+    /** Figura's own logo, used while Figura is installed. */
+    private static final ResourceLocation FIGURA_LOGO = SkinMod.rl("figura", "icon.png");
+    private static Boolean figuraLogo;
     static final ResourceLocation MIC_ICON = SkinMod.id("textures/gui/mic.png");
 
     private static final int ROW_H = 26;
@@ -219,10 +223,33 @@ public class SkinScreen extends Screen {
 
     @Override
     public void onFilesDrop(List<Path> paths) {
-        for (Path p : paths) if (p.toString().toLowerCase().endsWith(".png")) addFile(p);
+        for (Path p : paths) {
+            String n = p.toString().toLowerCase();
+            if (n.endsWith(".png")) addFile(p);
+            else if (n.endsWith(".zip")) addFiguraZip(p);
+        }
+    }
+
+    /** A Figura avatar dropped on the window goes to the selected outfit. */
+    private void addFiguraZip(Path zip) {
+        if (!SkinConfig.figuraEnabled() || !FiguraBridge.installed()) { status = Component.translatable("skinmod.figura_missing").getString(); return; }
+        if (current == null || current.preset) { status = Component.translatable("skinmod.figura_pick_outfit").getString(); return; }
+        try {
+            onFiguraPicked(current, FiguraZip.install(zip));
+            Toasts.show("Figura avatar added", current.name);
+        } catch (Exception e) {
+            status = e.getMessage();
+        }
     }
 
     // ---- drawing ------------------------------------------------------------------------------
+
+    /** The Figura logo (64 px) when Figura is there, else our own small stand-in. */
+    static void drawFiguraIcon(GuiGraphics g, int x, int y, int size) {
+        if (figuraLogo == null) figuraLogo = FiguraBridge.installed() && Minecraft.getInstance().getResourceManager().getResource(FIGURA_LOGO).isPresent();
+        if (figuraLogo) Gfx.blit(g, FIGURA_LOGO, x, y, size, size, 0, 0, 64, 64, 64, 64);
+        else Gfx.blit(g, FIGURA_ICON, x, y, size, size, 0, 0, 16, 16, 16, 16);
+    }
 
     private static void panel(GuiGraphics g, int x1, int y1, int x2, int y2) {
         g.fill(x1, y1, x2, y2, PANEL);
@@ -284,7 +311,7 @@ public class SkinScreen extends Screen {
             g.drawString(font, shown, lx + 30, y + 9, 0xFFFFFFFF);
             int ix = lx + 30 + font.width(shown) + 4;
             if (SkinConfig.figuraEnabled() && !o.figura.isEmpty()) {
-                Gfx.blit(g, FIGURA_ICON, ix, y + 6, 12, 12, 0, 0, 16, 16, 16, 16);
+                drawFiguraIcon(g, ix, y + 6, 12);
                 ix += 14;
             }
             if (SkinConfig.plasmoEnabled() && !o.openHash.isEmpty()) {

@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { unzipSync } from 'fflate'
 import { inside } from './assets'
-import type { AssetEntry, AssetSource, DownloadProgress } from '../shared/ipc'
+import type { AssetEntry, AssetSource, BlockFaces, DownloadProgress, FaceRef } from '../shared/ipc'
 
 /** Where downloads may come from: the official Mojang and Modrinth hosts, over HTTPS, nothing else. */
 const ALLOWED_HOSTS = new Set(['piston-meta.mojang.com', 'piston-data.mojang.com', 'launchermeta.mojang.com', 'launcher.mojang.com', 'api.modrinth.com', 'cdn.modrinth.com'])
@@ -15,8 +15,11 @@ const UA = { 'User-Agent': 'custom-mod-skin-launcher/0.1' }
 
 const ASSET_RE = /^assets\/([a-z0-9_.-]+)\/(textures|models)\/(block|item)\/([a-z0-9_./-]+)\.(png|json)$/
 
+const STATE_RE = /^assets\/([a-z0-9_.-]+)\/blockstates\/([a-z0-9_./-]+)\.json$/
+
 /** Matches a jar entry name we are willing to touch; names with ".." are never accepted. */
 const parseAsset = (name: string): RegExpExecArray | null => (name.includes('..') ? null : ASSET_RE.exec(name))
+const parseState = (name: string): RegExpExecArray | null => (name.includes('..') ? null : STATE_RE.exec(name))
 
 const gameDir = (): string => path.join(app.getPath('userData'), 'game')
 const clientJar = (mc: string): string => path.join(gameDir(), mc, 'client.jar')
@@ -178,6 +181,11 @@ export function listAssets(projectDir: string, sourceId: string): AssetEntry[] {
   const entries: AssetEntry[] = []
   unzipSync(data, {
     filter: (f) => {
+      const st = parseState(f.name)
+      if (st && f.originalSize <= MAX_ENTRY_BYTES) {
+        entries.push({ path: f.name, ns: st[1], kind: 'block', group: 'block', name: st[2] })
+        return false
+      }
       const m = parseAsset(f.name)
       if (m && f.originalSize <= MAX_ENTRY_BYTES) {
         entries.push({ path: f.name, ns: m[1], kind: m[2] === 'textures' ? 'texture' : 'model', group: m[3] as 'block' | 'item', name: m[4] })
@@ -200,10 +208,10 @@ export function thumbnails(projectDir: string, sourceId: string, paths: string[]
   return Object.fromEntries(Object.entries(files).map(([name, bytes]) => [name, `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`]))
 }
 
-/** Copies the chosen textures to textures/ and models to models/ in the project; returns the new project paths. */
-export function importAssets(projectDir: string, sourceId: string, paths: string[]): string[] {
+/** Copies the chosen textures to textures/ and models to models/ in the project; returns jar entry -> project path. */
+export function importAssets(projectDir: string, sourceId: string, paths: string[]): Record<string, string> {
   const files = readEntries(projectDir, sourceId, paths.slice(0, 500))
-  const out: string[] = []
+  const out: Record<string, string> = {}
   for (const [name, bytes] of Object.entries(files)) {
     const m = parseAsset(name)!
     const folder = m[2] === 'textures' ? 'textures' : 'models'
@@ -211,7 +219,145 @@ export function importAssets(projectDir: string, sourceId: string, paths: string
     const dest = inside(projectDir, `${folder}/${flat}`)
     fs.mkdirSync(path.dirname(dest), { recursive: true })
     fs.writeFileSync(dest, bytes)
-    out.push(`${folder}/${flat}`)
+    out[name] = `${folder}/${flat}`
+  }
+  return out
+}
+
+
+// ---- block previews --------------------------------------------------------------------------------
+
+type Json = Record<string, unknown>
+
+/** Reads one entry of a jar (null when missing). */
+const entryCache = new Map<string, Uint8Array | null>()
+function readOne(jar: string, name: string): Uint8Array | null {
+  const key = jar + '|' + name
+  if (entryCache.has(key)) return entryCache.get(key) ?? null
+  if (!fs.existsSync(jar)) return null
+  const hit = unzipSync(readJar(jar), { filter: (f) => f.name === name && f.originalSize <= MAX_ENTRY_BYTES })[name] ?? null
+  if (entryCache.size > 3000) entryCache.clear() // a plain cap is enough: previews of one page need a few hundred entries
+  entryCache.set(key, hit)
+  return hit
+}
+
+function readJson(jars: string[], name: string): Json | null {
+  for (const jar of jars) {
+    const bytes = readOne(jar, name)
+    if (!bytes) continue
+    try {
+      return JSON.parse(Buffer.from(bytes).toString('utf8')) as Json
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+const splitId = (id: string, defaultNs: string): [string, string] => {
+  const i = id.indexOf(':')
+  return i < 0 ? [defaultNs, id] : [id.slice(0, i), id.slice(i + 1)]
+}
+
+/** The first model a block state file points at. */
+function stateModel(json: Json): string | null {
+  const v = json.variants as Record<string, unknown> | undefined
+  if (v) {
+    const first = Object.values(v)[0]
+    const one = Array.isArray(first) ? first[0] : first
+    return typeof (one as Json | undefined)?.model === 'string' ? ((one as Json).model as string) : null
+  }
+  const mp = json.multipart as { apply?: unknown }[] | undefined
+  const ap = mp?.[0]?.apply
+  const one = Array.isArray(ap) ? ap[0] : ap
+  return typeof (one as Json | undefined)?.model === 'string' ? ((one as Json).model as string) : null
+}
+
+/** Which texture variables are the top and the side of the well-known vanilla parent models. */
+const PARENT_FACES: Record<string, { top: string[]; side: string[] }> = {
+  cube_all: { top: ['all'], side: ['all'] },
+  cube_column: { top: ['end'], side: ['side'] },
+  cube_column_horizontal: { top: ['end'], side: ['side'] },
+  cube_bottom_top: { top: ['top'], side: ['side'] },
+  cube_top: { top: ['top'], side: ['side'] },
+  orientable: { top: ['top'], side: ['front', 'side'] },
+  orientable_vertical: { top: ['up', 'top'], side: ['side', 'front'] },
+  cube: { top: ['up'], side: ['north', 'east', 'south', 'west'] },
+  cube_mirrored_all: { top: ['all'], side: ['all'] },
+  cube_directional: { top: ['up'], side: ['north'] },
+  leaves: { top: ['all'], side: ['all'] },
+  template_single_face: { top: ['texture'], side: ['texture'] }
+}
+const GUESS = ['side', 'all', 'texture', 'front', 'top', 'end', 'up', 'particle', 'layer0']
+
+/** Walks a model's parent chain (inside the jars we can read) and returns its texture variables and the vanilla parent it ends at. */
+function modelTextures(jars: string[], modelId: string, depth = 0): { textures: Record<string, string>; root: string | null } {
+  if (depth > 8) return { textures: {}, root: null }
+  const [ns, p] = splitId(modelId, 'minecraft')
+  const json = readJson(jars, `assets/${ns}/models/${p}.json`)
+  const own = Object.fromEntries(Object.entries((json?.textures as Record<string, unknown>) ?? {}).filter(([, v]) => typeof v === 'string')) as Record<string, string>
+  const parent = typeof json?.parent === 'string' ? json.parent : null
+  if (!json) {
+    // not in a jar: a vanilla parent such as minecraft:block/cube_all is known by name
+    const base = p.split('/').pop() ?? p
+    return { textures: {}, root: ns === 'minecraft' ? base : null }
+  }
+  if (!parent) return { textures: own, root: null }
+  const up = modelTextures(jars, parent, depth + 1)
+  return { textures: { ...up.textures, ...own }, root: up.root }
+}
+
+function resolveVar(textures: Record<string, string>, key: string, depth = 0): string | null {
+  const v = textures[key]
+  if (!v || depth > 8) return null
+  return v.startsWith('#') ? resolveVar(textures, v.slice(1), depth + 1) : v
+}
+
+/** Reads a texture from the source jar, then from Minecraft as a fallback. */
+function faceRef(jars: { id: string; file: string }[], textureId: string, ns: string): FaceRef | null {
+  const [tns, tp] = splitId(textureId, ns === 'minecraft' ? 'minecraft' : 'minecraft')
+  const name = `assets/${tns}/textures/${tp}.png`
+  if (name.includes('..') || !/^assets\/[a-z0-9_.-]+\/textures\/[a-z0-9_./-]+\.png$/.test(name)) return null
+  for (const j of jars) {
+    const bytes = readOne(j.file, name)
+    if (bytes) return { src: j.id, path: name, url: `data:image/png;base64,${Buffer.from(bytes).toString('base64')}` }
+  }
+  return null
+}
+
+/** The top and side textures of blocks, found through their block state and model files. */
+export function blockFaces(projectDir: string, sourceId: string, mc: string, names: string[]): Record<string, BlockFaces> {
+  checkMc(mc)
+  const main = { id: sourceId, file: jarPath(projectDir, sourceId) }
+  const vanilla = { id: `mc:${mc}`, file: clientJar(mc) }
+  const jars = main.id === vanilla.id ? [main] : [main, vanilla]
+  const files = jars.map((j) => j.file)
+  const out: Record<string, BlockFaces> = {}
+  for (const name of names.slice(0, 120)) {
+    const m = parseState(name)
+    if (!m) continue
+    const ns = m[1]
+    const state = readJson(files, name)
+    const model = (state && stateModel(state)) ?? `${ns}:block/${m[2]}`
+    const { textures, root } = modelTextures(files, model)
+    const rule = root ? PARENT_FACES[root] : undefined
+    const pick = (keys: string[]): string | null => {
+      for (const k of [...keys, ...GUESS]) {
+        const v = resolveVar(textures, k)
+        if (v) return v
+      }
+      return null
+    }
+    const topId = pick(rule?.top ?? ['top', 'up', 'end'])
+    const sideId = pick(rule?.side ?? ['side', 'all', 'front'])
+    const faces: BlockFaces = {}
+    const top = topId ? faceRef(jars, topId, ns) : null
+    const side = sideId ? faceRef(jars, sideId, ns) : null
+    if (top) faces.top = top
+    if (side) faces.side = side
+    if (!faces.top && faces.side) faces.top = faces.side
+    if (!faces.side && faces.top) faces.side = faces.top
+    if (faces.top || faces.side) out[name] = faces
   }
   return out
 }

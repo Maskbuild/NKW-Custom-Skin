@@ -10,25 +10,20 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.core.particles.BlockParticleOption;
-import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.client.renderer.debug.DebugRenderer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/** Client side of skin zones: hotbar hint / auto-open, marker icons, and the outline shown to creative builders. */
+import java.util.Set;
+
+/** Client side of skin zones: the player is inside / not, the hint, the instant window, and the builder's view of the zones. */
 public final class ZoneClient {
     private static boolean inside;
     /** the window was opened or dismissed for this visit; do not reopen until the player leaves */
     private static boolean handled;
-    private static int markerTick;
 
     private ZoneClient() {}
-
-    public static void setInside(boolean now) {
-        inside = now;
-        if (!now) handled = false;
-    }
 
     public static boolean isInside() { return inside; }
 
@@ -45,41 +40,54 @@ public final class ZoneClient {
                 && (mc.player.getMainHandItem().is(SkinBlocks.ZONE_ITEM) || mc.player.getOffhandItem().is(SkinBlocks.ZONE_ITEM));
     }
 
-    /** Marker icons at every zone block while the item is held (they have no model of their own). */
-    private static void markers(Minecraft mc) {
-        if (mc.level == null || !holdingZoneItem(mc)) { markerTick = 0; return; }
-        if (markerTick++ % 60 != 0) return; // the particle lives 80 ticks
-        for (ZoneBlockEntity z : ZoneBlockEntity.loaded(true)) {
-            if (z.isRemoved() || z.getBlockPos().distSqr(mc.player.blockPosition()) > 48 * 48) continue;
-            mc.level.addParticle(new BlockParticleOption(ParticleTypes.BLOCK_MARKER, z.getBlockState()),
-                    z.getBlockPos().getX() + 0.5, z.getBlockPos().getY() + 0.5, z.getBlockPos().getZ() + 0.5, 0, 0, 0);
+    /** Worked out here from the zone blocks the client has loaded, so the hint comes and goes at once. */
+    private static void updateInside(Minecraft mc) {
+        boolean now = false;
+        Set<ZoneBlockEntity> zones = ZoneBlockEntity.loaded();
+        if (!zones.isEmpty()) {
+            Vec3 p = mc.player.position().add(0, 0.1, 0);
+            for (ZoneBlockEntity z : zones) {
+                if (!z.isRemoved() && z.getLevel() == mc.level && z.box().contains(p)) { now = true; break; }
+            }
+        }
+        if (now != inside) {
+            inside = now;
+            if (!now) handled = false;
         }
     }
 
     /** Every client tick (loader hook). */
-    public static void tick(Minecraft mc, KeyMapping openKey) {
-        markers(mc);
-        if (!inside || mc.player == null || mc.level == null) return;
-        if ("instant".equals(SkinConfig.zoneMode())) {
-            if (!handled && mc.screen == null) {
-                handled = true;
-                mc.setScreen(new SkinScreen());
-            }
-        } else if (mc.screen == null) {
-            String key = openKey != null ? openKey.getTranslatedKeyMessage().getString() : "K";
-            mc.gui.setOverlayMessage(Component.literal(SkinConfig.zoneMessage().replace("{{button}}", key)), false);
+    public static void tick(Minecraft mc) {
+        if (!SkinConfig.zoneEnabled() || mc.player == null || mc.level == null) {
+            reset();
+            return;
+        }
+        updateInside(mc);
+        if (inside && !handled && "instant".equals(SkinConfig.zoneMode()) && mc.screen == null) {
+            handled = true;
+            mc.setScreen(new SkinScreen());
         }
     }
 
-    /** Draws the zone boxes while the item is held; the loader calls this from its world-render event. */
+    /** The hotbar message for the zone the player is in, or null. */
+    static Component hint(KeyMapping openKey) {
+        if (!inside || !"hint".equals(SkinConfig.zoneMode())) return null;
+        String key = openKey != null ? openKey.getTranslatedKeyMessage().getString() : "K";
+        return Component.literal(SkinConfig.zoneMessage().replace("{{button}}", key));
+    }
+
+    /**
+     * Draws the zones while the item is held: the block itself as a green cube, and the whole area as an outline.
+     * The loader calls this from its world-render event.
+     */
     public static void renderOutline(PoseStack pose, MultiBufferSource buffers, Vec3 cam) {
         Minecraft mc = Minecraft.getInstance();
         if (!SkinConfig.zoneEnabled() || !holdingZoneItem(mc)) return;
-        VertexConsumer vc = buffers.getBuffer(RenderType.lines());
-        for (ZoneBlockEntity z : ZoneBlockEntity.loaded(true)) {
+        VertexConsumer lines = buffers.getBuffer(RenderType.lines());
+        for (ZoneBlockEntity z : ZoneBlockEntity.loaded()) {
             if (z.isRemoved() || z.getBlockPos().distToCenterSqr(cam) > 96 * 96) continue;
-            AABB b = z.box().move(-cam.x, -cam.y, -cam.z);
-            LevelRenderer.renderLineBox(pose, vc, b, 0.25f, 1.0f, 0.45f, 1.0f);
+            DebugRenderer.renderFilledBox(pose, buffers, new AABB(z.getBlockPos()).inflate(0.002).move(-cam.x, -cam.y, -cam.z), 0.25f, 1.0f, 0.45f, 0.55f);
+            LevelRenderer.renderLineBox(pose, lines, z.box().move(-cam.x, -cam.y, -cam.z), 0.25f, 1.0f, 0.45f, 1.0f);
         }
     }
 }

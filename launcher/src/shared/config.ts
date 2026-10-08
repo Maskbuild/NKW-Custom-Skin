@@ -5,7 +5,8 @@ import type { Project } from './schema'
 export interface ModRuntimeConfig {
   maxSkins: number // -1 = unlimited
   key: { enabled: boolean; default: string }
-  block: { enabled: boolean; name: string }
+  /** builtin = the Skin Station block exists; entries = connected Block nodes (a game block, or a block of our own) */
+  block: { enabled: boolean; builtin: boolean; name: string; message: string; entries: { id: string; vanilla: string; name: string }[] }
   figura: { enabled: boolean }
   plasmo: { enabled: boolean }
   zone: { enabled: boolean; mode: 'hint' | 'instant'; message: string; width: number; length: number; height: number }
@@ -25,6 +26,44 @@ export interface PresetSkin {
   file: string // project-relative PNG
 }
 
+/** A block that opens the wardrobe. `vanilla` set = an existing game block; otherwise a new block `id` made from the textures. */
+export interface BlockEntry {
+  id: string
+  vanilla: string
+  name: string
+  texture: string
+  textureTop: string
+}
+
+const GAME_ID = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/
+
+/** The Block nodes wired into the wardrobe's Blocks pin (only while the skin block is switched on). */
+export function collectBlocks(p: Project): BlockEntry[] {
+  const live = new Map(p.nodes.filter((n) => !n.disabled).map((n) => [n.id, n]))
+  const w = [...live.values()].find((n) => n.type === 'skinWardrobe')
+  if (!w || !valueOf(NODE_DEF_MAP.skinWardrobe, w.data, 'blockEnabled')) return []
+  const gd = NODE_DEF_MAP.gameItem
+  const used = new Set<string>()
+  const out: BlockEntry[] = []
+  for (const e of p.edges) {
+    if (e.target !== w.id || e.targetHandle !== 'blocks') continue
+    const n = live.get(e.source)
+    if (!n || n.type !== 'gameItem' || valueOf(gd, n.data, 'kind') !== 'block') continue
+    const custom = Boolean(valueOf(gd, n.data, 'custom'))
+    const gameId = String(valueOf(gd, n.data, 'gameId')).trim().toLowerCase()
+    const name = String(valueOf(gd, n.data, 'name')).trim() || 'Skin Block'
+    let id = ''
+    if (custom) {
+      const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'skin_block'
+      id = /^[a-z]/.test(base) ? base : `block_${base}`
+      for (let i = 2; used.has(id); i++) id = `${id.replace(/_\d+$/, '')}_${i}`
+      used.add(id)
+    } else if (!GAME_ID.test(gameId) || out.some((b) => b.vanilla === gameId)) continue
+    out.push({ id, vanilla: custom ? '' : gameId, name, texture: String(n.data.texture ?? ''), textureTop: String(n.data.textureTop ?? '') })
+  }
+  return out
+}
+
 export function buildRuntimeConfig(p: Project): ModRuntimeConfig {
   const live = p.nodes.filter((n) => !n.disabled)
   const w = live.find((n) => n.type === 'skinWardrobe')
@@ -36,7 +75,17 @@ export function buildRuntimeConfig(p: Project): ModRuntimeConfig {
   return {
     maxSkins: get('unlimited') ? -1 : Number(get('maxSkins')),
     key: { enabled: Boolean(get('keyEnabled')), default: String(get('key') || 'K').toUpperCase() },
-    block: { enabled: Boolean(get('blockEnabled')), name: String(get('blockName') || 'Skin Station') },
+    block: (() => {
+      const enabled = Boolean(get('blockEnabled'))
+      const entries = collectBlocks(p)
+      return {
+        enabled,
+        builtin: enabled && entries.length === 0,
+        name: String(get('blockName') || 'Skin Station'),
+        message: String(get('blockMessage') ?? ''),
+        entries: entries.map(({ id, vanilla, name }) => ({ id, vanilla, name }))
+      }
+    })(),
     figura: { enabled: live.some((n) => n.type === 'figura') },
     plasmo: { enabled: live.some((n) => n.type === 'plasmoVoice') },
     zone: {

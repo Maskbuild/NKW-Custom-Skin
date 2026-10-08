@@ -158,3 +158,16 @@
 .asset .model { font-family: var(--mono); color: var(--muted); }
 .asset small { width: 100%; text-align: center; font-size: 10px; color: var(--muted); }
 .center-text { text-align: center; }
+
+/* isometric block (like an inventory icon) */
+.cube-wrap { display: inline-grid; place-items: center; flex-shrink: 0; }
+.cube { position: relative; width: var(--e); height: var(--e); transform-style: preserve-3d; transform: rotateX(-28deg) rotateY(-45deg); }
+.cf { position: absolute; inset: 0; background-size: 100% auto; background-repeat: no-repeat; background-position: top; image-rendering: pixelated; background-color: var(--panel-3); }
+.cf.top { transform: rotateX(90deg) translateZ(calc(var(--e) / 2)); filter: brightness(1.12); }
+.cf.left { transform: translateZ(calc(var(--e) / 2)); filter: brightness(0.82); }
+.cf.right { transform: rotateY(90deg) translateZ(calc(var(--e) / 2)); filter: brightness(0.62); }
+.nk-preview { display: grid; place-items: center; padding: 8px 0 2px; }
+.nk-preview img { width: 48px; height: 48px; object-fit: contain; }
+.insp-preview { display: grid; place-items: center; padding: 6px 0 14px; }
+.insp-preview img { width: 96px; height: 96px; object-fit: contain; }
+.asset[draggable='true'] { cursor: grab; }

@@ -187,7 +187,10 @@ public final class Wardrobe {
             if (mc.player != null) ClientSkins.setOwn(mc.player.getUUID(), o.hash, png, o.slim, open != null ? o.openHash : "", open);
             ClientSkins.upload(png, o.slim, 0);
             if (open != null) ClientSkins.upload(open, o.slim, 1);
-            if (SkinConfig.figuraEnabled() && !o.figura.isEmpty()) FiguraBridge.load(o.figura, true);
+            if (SkinConfig.figuraEnabled()) {
+                if (!o.figura.isEmpty()) FiguraBridge.load(o.figura, true); // this outfit brings its own avatar
+                else FiguraBridge.reloadCurrent(); // keep the current avatar, but rebuild it for the new skin
+            }
             Toasts.show("Skin applied", o.name);
         } catch (Exception e) {
             SkinMod.LOGGER.warn("Failed to apply skin", e);
@@ -200,6 +203,7 @@ public final class Wardrobe {
         save();
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) ClientSkins.resetOwn(mc.player.getUUID());
+        if (SkinConfig.figuraEnabled()) FiguraBridge.reloadCurrent();
         Toasts.show("Skin reset", "You are using your Minecraft skin again");
     }
 

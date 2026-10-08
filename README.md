@@ -5,8 +5,9 @@ A node-based launcher that builds a **Minecraft Java mod with HD skin support** 
 
 - Skin wardrobe (key, block or zone), up to a limit you set or unlimited, visible to everyone on a server
 - Preset skins shipped inside the mod
-- Skin zones: a creative-only block that marks an area where players can change skin
-- Optional **Figura** avatar per outfit and **Plasmo Voice** talking skin (neither is required)
+- Skin zones: a creative-only block that marks an area where players can change skin (you see it as a green block while holding it)
+- Skin blocks: right-click a game block (a crafting table, a mod block …) or a block of your own to open the wardrobe; a message shows while you look at it
+- Optional **Figura** avatar per outfit (a folder or a `.zip`, shown with the Figura logo) and **Plasmo Voice** talking skin (neither is required). Figura models that use the player skin get the HD skin too
 - Browse blocks, items, models and textures of Minecraft and of any mod, and import them into your project
 
 ## Download
@@ -38,8 +39,12 @@ the mod has skin zones, the key only works inside a zone.
 
 *Game items* (left bar) lists the blocks, items, models and textures of Minecraft (downloaded once from Mojang and
 checked with their checksum, you are asked first) and of mods you add (a `.jar` file or *Mod browser… → Add to
-project*, from Modrinth). Select entries and import them into `textures/` and `models/`; a texture can then be the
-station block's look or a skin.
+project*, from Modrinth). Blocks are drawn like the game draws them. Drag a block or item onto the canvas to get a **Block / item** node (its textures
+are copied into the project), or select entries and import them into `textures/` and `models/`.
+
+In the wardrobe node, switch on *Skin changing block* to get a **Blocks** pin and connect Block / item nodes to it: a game
+block opens the wardrobe when right-clicked, or tick *make my own block* to add a new block built from the textures.
+With a skin block the key stops working (like with zones, where it only works inside a zone).
 
 ## Build from source
 

@@ -75,6 +75,28 @@ public final class FiguraBridge {
         }
     }
 
+    /**
+     * Rebuilds the player's current Figura avatar. Done after every skin change so avatars that use the skin
+     * (their "skin" texture, or parts copied from it) pick up the new one without a manual reload.
+     */
+    public static void reloadCurrent() {
+        if (!installed()) return;
+        // after the tasks already queued, so the new skin texture is registered before Figura looks at it
+        Minecraft.getInstance().execute(() -> {
+            Path last = current();
+            if (last != null && Files.exists(last)) {
+                load(last, true); // a local avatar: rebuild it and upload it again
+                return;
+            }
+            try {
+                Minecraft mc = Minecraft.getInstance();
+                if (mc.player != null) Class.forName(MANAGER).getMethod("reloadAvatar", UUID.class).invoke(null, mc.player.getUUID());
+            } catch (Throwable t) {
+                SkinMod.LOGGER.debug("Could not reload the Figura avatar", t);
+            }
+        });
+    }
+
     /** Called every client tick: uploads a freshly loaded avatar once Figura has finished building it. */
     public static void tick() {
         if (pendingUpload < 0) return;

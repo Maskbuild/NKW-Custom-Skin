@@ -1,4 +1,4 @@
-import { NODE_DEF_MAP, assetFiles, valueOf, type Text } from './nodes'
+import { NODE_DEF_MAP, assetFiles, pinVisible, valueOf, type Text } from './nodes'
 import { SKIN_SIZES, isTargetSupported, type Project } from './schema'
 
 export interface Diagnostic {
@@ -66,11 +66,42 @@ export function validate(p: Project, assets: AssetInfo = {}): Diagnostic[] {
     }
     if (n.type === 'skinWardrobe') {
       const d = NODE_DEF_MAP.skinWardrobe
-      if (live.some((x) => x.type === 'skinZone') && valueOf(d, n.data, 'keyEnabled')) {
+      if (live.some((x) => x.type === 'skinZone') && valueOf(d, n.data, 'keyEnabled') && !valueOf(d, n.data, 'blockEnabled')) {
         out.push({ severity: 'warning', nodeId: n.id, message: t('Skin zones are in the mod, so the key only works inside a zone', 'มีพื้นที่เปลี่ยนสกินในม็อด ปุ่มจึงใช้ได้เฉพาะภายในพื้นที่') })
       }
       if (!valueOf(d, n.data, 'keyEnabled') && !valueOf(d, n.data, 'blockEnabled') && !p.edges.some((e) => e.target === n.id && e.targetHandle === 'zones')) {
         out.push({ severity: 'warning', nodeId: n.id, message: t('No way to open the wardrobe: enable the key, the block or connect a zone', 'ไม่มีทางเปิดตู้เสื้อผ้า: เปิดปุ่ม บล็อก หรือเชื่อมพื้นที่') })
+      }
+    }
+  }
+
+  // Block / item nodes
+  const wardrobe = live.find((n) => n.type === 'skinWardrobe')
+  for (const n of live) {
+    if (n.type !== 'gameItem') continue
+    const d = NODE_DEF_MAP.gameItem
+    const kind = String(valueOf(d, n.data, 'kind'))
+    const gameId = String(valueOf(d, n.data, 'gameId')).trim()
+    const custom = kind === 'block' && Boolean(valueOf(d, n.data, 'custom'))
+    const wired = !!wardrobe && p.edges.some((e) => e.source === n.id && e.target === wardrobe.id)
+    if (!custom && !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(gameId.toLowerCase())) {
+      out.push({ severity: 'error', nodeId: n.id, message: t(`"${gameId}" is not a game id (like minecraft:stone)`, `"${gameId}" ไม่ใช่ ID ในเกม (เช่น minecraft:stone)`) })
+    }
+    if (!custom && !gameId.toLowerCase().startsWith('minecraft:') && wired) {
+      out.push({ severity: 'warning', nodeId: n.id, message: t(`Players need the mod "${gameId.split(':')[0]}" for this block to exist`, `ผู้เล่นต้องมีม็อด "${gameId.split(':')[0]}" บล็อกนี้ถึงจะมีอยู่`) })
+    }
+    if (custom && !String(n.data.texture ?? '')) out.push({ severity: 'error', nodeId: n.id, message: t('Choose a texture for your block', 'เลือกเท็กซ์เจอร์ให้บล็อกของคุณ') })
+    if (kind === 'item' && wired) out.push({ severity: 'error', nodeId: n.id, message: t('Only blocks can open the skin window, not items', 'มีแค่บล็อกที่เปิดหน้าต่างสกินได้ ไอเทมทำไม่ได้') })
+    if (!wired) out.push({ severity: 'warning', nodeId: n.id, message: t('Not connected to the wardrobe, so it is not used', 'ยังไม่ได้ต่อกับตู้เสื้อผ้า จึงไม่ถูกใช้') })
+  }
+  // a wire into a pin that is switched off does nothing
+  if (wardrobe) {
+    const wd = NODE_DEF_MAP.skinWardrobe
+    for (const e of p.edges) {
+      const pin = wd.inputs.find((x) => x.id === e.targetHandle)
+      if (e.target === wardrobe.id && pin && !pinVisible(wd, pin, wardrobe.data)) {
+        out.push({ severity: 'warning', nodeId: wardrobe.id, message: t('A wire goes into a pin that is switched off (turn on "Skin changing block")', 'มีสายต่อเข้าช่องที่ปิดอยู่ (เปิด "บล็อกเปลี่ยนสกิน")') })
+        break
       }
     }
   }

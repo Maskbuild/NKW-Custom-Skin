@@ -1,11 +1,15 @@
 package dev.custommodskin.runtime;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Feature switches baked into the jar by the launcher exporter (skinmod.config.json). */
 public final class SkinConfig {
@@ -42,6 +46,36 @@ public final class SkinConfig {
     public static String defaultKey() {
         JsonObject k = obj("key");
         return k != null && k.has("default") ? k.get("default").getAsString() : "K";
+    }
+
+    /** A block that opens the wardrobe: a game block (vanilla = its id) or a new block of ours (id). */
+    public record BlockEntry(String id, String vanilla, String name) {}
+
+    /** The built-in Skin Station block exists when the skin block is on and no Block node is connected. */
+    public static boolean builtinStation() {
+        JsonObject b = obj("block");
+        return blockEnabled() && (b == null || !b.has("builtin") || b.get("builtin").getAsBoolean());
+    }
+
+    public static List<BlockEntry> blocks() {
+        List<BlockEntry> out = new ArrayList<>();
+        JsonObject b = obj("block");
+        if (b == null || !b.has("entries") || !b.get("entries").isJsonArray()) return out;
+        JsonArray arr = b.getAsJsonArray("entries");
+        for (JsonElement e : arr) {
+            if (!e.isJsonObject()) continue;
+            JsonObject o = e.getAsJsonObject();
+            String id = o.has("id") ? o.get("id").getAsString() : "";
+            String vanilla = o.has("vanilla") ? o.get("vanilla").getAsString() : "";
+            if (id.isEmpty() && vanilla.isEmpty()) continue;
+            out.add(new BlockEntry(id, vanilla, o.has("name") ? o.get("name").getAsString() : id));
+        }
+        return out;
+    }
+
+    public static String blockMessage() {
+        JsonObject b = obj("block");
+        return b != null && b.has("message") && !b.get("message").getAsString().isBlank() ? b.get("message").getAsString() : "Right-click to change your skin";
     }
 
     public static boolean blockEnabled() {

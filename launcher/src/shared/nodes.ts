@@ -5,7 +5,13 @@ export interface Text {
   th: string
 }
 
-export type PinType = 'skin' | 'zone'
+export type PinType = 'skin' | 'zone' | 'block'
+
+/** A property must have this value. */
+export interface Cond {
+  key: string
+  eq: string | number | boolean
+}
 
 export interface PinDef {
   id: string
@@ -13,6 +19,8 @@ export interface PinDef {
   type: PinType
   /** input accepts many wires */
   multi?: boolean
+  /** the pin only exists while the node's properties match (all of them) */
+  showIf?: Cond | Cond[]
 }
 
 export type PropKind = 'text' | 'id' | 'number' | 'bool' | 'select' | 'asset' | 'key'
@@ -26,13 +34,13 @@ export interface PropDef {
   hint?: Text
   min?: number
   max?: number
-  /** only show when another prop has this value */
-  showIf?: { key: string; eq: string | number | boolean }
+  /** only show when other props have these values */
+  showIf?: Cond | Cond[]
 }
 
 export interface NodeDef {
   type: string
-  category: 'skins' | 'triggers' | 'addons'
+  category: 'skins' | 'triggers' | 'blocks' | 'addons'
   icon: string
   title: Text
   description: Text
@@ -48,10 +56,11 @@ export interface NodeDef {
 export const CATEGORIES: Record<NodeDef['category'], { label: Text; color: string }> = {
   skins: { label: { en: 'Skins', th: 'สกิน' }, color: '#ec4899' },
   triggers: { label: { en: 'Triggers', th: 'ตัวเปิดใช้งาน' }, color: '#3b82f6' },
+  blocks: { label: { en: 'Blocks & items', th: 'บล็อกและไอเทม' }, color: '#14b8a6' },
   addons: { label: { en: 'Add-ons', th: 'ส่วนเสริม' }, color: '#f59e0b' }
 }
 
-export const PIN_COLORS: Record<PinType, string> = { skin: '#ec4899', zone: '#22c55e' }
+export const PIN_COLORS: Record<PinType, string> = { skin: '#ec4899', zone: '#22c55e', block: '#14b8a6' }
 
 const t = (en: string, th: string): Text => ({ en, th })
 
@@ -69,21 +78,23 @@ export const NODE_DEFS: NodeDef[] = [
     available: true,
     inputs: [
       { id: 'skins', label: t('Preset skins', 'สกินที่แจก'), type: 'skin', multi: true },
-      { id: 'zones', label: t('Zones', 'พื้นที่'), type: 'zone', multi: true }
+      { id: 'zones', label: t('Zones', 'พื้นที่'), type: 'zone', multi: true },
+      { id: 'blocks', label: t('Blocks', 'บล็อก'), type: 'block', multi: true, showIf: { key: 'blockEnabled', eq: true } }
     ],
     outputs: [],
     props: [
-      { key: 'keyEnabled', label: t('Open with a key', 'เปิดด้วยปุ่ม'), kind: 'bool', default: true },
+      { key: 'keyEnabled', label: t('Open with a key', 'เปิดด้วยปุ่ม'), kind: 'bool', default: true, showIf: { key: 'blockEnabled', eq: false }, hint: t('Not available with a skin block: the block opens the window instead.', 'ใช้ไม่ได้เมื่อใช้บล็อกเปลี่ยนสกิน: ให้คลิกที่บล็อกแทน') },
       {
         key: 'key',
         label: t('Default key', 'ปุ่มเริ่มต้น'),
         kind: 'key',
         default: 'K',
-        showIf: { key: 'keyEnabled', eq: true },
+        showIf: [{ key: 'keyEnabled', eq: true }, { key: 'blockEnabled', eq: false }],
         hint: t('Players can rebind it in Controls.', 'ผู้เล่นเปลี่ยนได้ในหน้าตั้งค่าปุ่ม')
       },
-      { key: 'blockEnabled', label: t('Skin station block', 'บล็อกเปลี่ยนสกิน'), kind: 'bool', default: false, hint: t('Right-click the block to open the window (no key needed).', 'คลิกขวาที่บล็อกเพื่อเปิดหน้าต่าง (ไม่ต้องใช้ปุ่ม)') },
-      { key: 'blockName', label: t('Block name', 'ชื่อบล็อก'), kind: 'text', default: 'Skin Station', showIf: { key: 'blockEnabled', eq: true } },
+      { key: 'blockEnabled', label: t('Skin changing block', 'บล็อกเปลี่ยนสกิน'), kind: 'bool', default: false, hint: t('Right-click the block to open the window. Connect Block nodes to choose which blocks do it; with none, a built-in Skin Station block is added. The key stops working.', 'คลิกขวาที่บล็อกเพื่อเปิดหน้าต่าง ต่อโหนดบล็อกเพื่อเลือกว่าบล็อกไหน ถ้าไม่ต่อจะมีบล็อก Skin Station ให้เอง ปุ่มกดจะใช้ไม่ได้') },
+      { key: 'blockMessage', label: t('Message when looking at the block', 'ข้อความเมื่อมองที่บล็อก'), kind: 'text', default: 'Right-click to change your skin', showIf: { key: 'blockEnabled', eq: true } },
+      { key: 'blockName', label: t('Built-in block name', 'ชื่อบล็อกในตัว'), kind: 'text', default: 'Skin Station', showIf: { key: 'blockEnabled', eq: true }, hint: t('Used when no Block node is connected.', 'ใช้เมื่อไม่ได้ต่อโหนดบล็อก') },
       {
         key: 'stationTexture',
         label: t('Block texture', 'เท็กซ์เจอร์บล็อก'),
@@ -189,6 +200,43 @@ export const NODE_DEFS: NodeDef[] = [
     inputs: [],
     outputs: [],
     props: []
+  },
+  {
+    type: 'gameItem',
+    category: 'blocks',
+    icon: '🧱',
+    title: t('Block / item', 'บล็อก / ไอเทม'),
+    description: t(
+      'A block or item from the game or a mod (drag it from Game items). Connect a block to the wardrobe to make it open the skin window.',
+      'บล็อกหรือไอเทมจากเกมหรือม็อด (ลากมาจากแท็บไอเทมในเกม) ต่อบล็อกเข้ากับตู้เสื้อผ้าเพื่อให้คลิกแล้วเปิดหน้าต่างสกิน'
+    ),
+    available: true,
+    inputs: [],
+    outputs: [{ id: 'block', label: t('Block', 'บล็อก'), type: 'block' }],
+    props: [
+      {
+        key: 'kind',
+        label: t('Type', 'ชนิด'),
+        kind: 'select',
+        default: 'block',
+        options: [
+          { value: 'block', label: t('Block', 'บล็อก') },
+          { value: 'item', label: t('Item', 'ไอเทม') }
+        ]
+      },
+      { key: 'gameId', label: t('Game ID', 'ID ในเกม'), kind: 'text', default: 'minecraft:stone', hint: t('For example minecraft:crafting_table or farmersdelight:stove.', 'เช่น minecraft:crafting_table หรือ farmersdelight:stove') },
+      {
+        key: 'custom',
+        label: t('Make my own block from these textures', 'สร้างบล็อกของฉันเองจากเท็กซ์เจอร์เหล่านี้'),
+        kind: 'bool',
+        default: false,
+        showIf: { key: 'kind', eq: 'block' },
+        hint: t('Off: the game block above opens the window. On: a new block is added to your mod.', 'ปิด: คลิกบล็อกในเกมข้างบนแล้วเปิดหน้าต่าง เปิด: เพิ่มบล็อกใหม่เข้าม็อดของคุณ')
+      },
+      { key: 'name', label: t('Block name', 'ชื่อบล็อก'), kind: 'text', default: 'My Skin Block', showIf: [{ key: 'kind', eq: 'block' }, { key: 'custom', eq: true }] },
+      { key: 'texture', label: t('Side texture / icon', 'เท็กซ์เจอร์ด้านข้าง / ไอคอน'), kind: 'asset', default: '' },
+      { key: 'textureTop', label: t('Top texture', 'เท็กซ์เจอร์ด้านบน'), kind: 'asset', default: '', showIf: { key: 'kind', eq: 'block' } }
+    ]
   }
 ]
 
@@ -201,8 +249,12 @@ export const defaultData = (def: NodeDef): Record<string, unknown> =>
 export const valueOf = (def: NodeDef, data: Record<string, unknown>, key: string): unknown =>
   data[key] ?? def.props.find((p) => p.key === key)?.default
 
-export const propVisible = (def: NodeDef, p: PropDef, data: Record<string, unknown>): boolean =>
-  !p.showIf || valueOf(def, data, p.showIf.key) === p.showIf.eq
+const holds = (def: NodeDef, data: Record<string, unknown>, cond?: Cond | Cond[]): boolean =>
+  !cond || [cond].flat().every((c) => valueOf(def, data, c.key) === c.eq)
+
+export const propVisible = (def: NodeDef, p: PropDef, data: Record<string, unknown>): boolean => holds(def, data, p.showIf)
+
+export const pinVisible = (def: NodeDef, pin: PinDef, data: Record<string, unknown>): boolean => holds(def, data, pin.showIf)
 
 /** Every project file a node points at through an "asset" property (skins, block textures …). */
 export const assetFiles = (nodes: { type: string; data: Record<string, unknown> }[]): string[] => {

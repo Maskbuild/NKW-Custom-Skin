@@ -36,6 +36,7 @@ const api: Api = {
   addModrinth: (slug) => ipcRenderer.invoke('assets:addModrinth', slug),
   listAssets: (dir, id) => ipcRenderer.invoke('assets:list', dir, id),
   thumbnails: (dir, id, paths) => ipcRenderer.invoke('assets:thumbs', dir, id, paths),
+  blockFaces: (dir, id, mc, names) => ipcRenderer.invoke('assets:blockFaces', dir, id, mc, names),
   importAssets: (dir, id, paths) => ipcRenderer.invoke('assets:import', dir, id, paths),
   onDownloadProgress: (cb) => {
     const fn = (_: unknown, p: Parameters<typeof cb>[0]): void => cb(p)

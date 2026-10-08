@@ -12,14 +12,13 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** A skin zone: an invisible box centred on the block (x/z) and rising from it (y). */
 public class ZoneBlockEntity extends BlockEntity {
-    private static final Set<ZoneBlockEntity> SERVER = Collections.synchronizedSet(new HashSet<>());
-    private static final Set<ZoneBlockEntity> CLIENT = Collections.synchronizedSet(new HashSet<>());
+    /** Zone blocks the client knows about; weakly consistent iteration is safe, so nobody copies it. */
+    private static final Set<ZoneBlockEntity> LOADED = ConcurrentHashMap.newKeySet();
 
     private int width = SkinConfig.zoneDefault("width");
     private int length = SkinConfig.zoneDefault("length");
@@ -29,12 +28,12 @@ public class ZoneBlockEntity extends BlockEntity {
         super(SkinBlocks.ZONE_BE, pos, state);
     }
 
-    /** Loaded zones of one side (server or client), as a copy that is safe to iterate. */
-    public static Set<ZoneBlockEntity> loaded(boolean client) {
-        Set<ZoneBlockEntity> src = client ? CLIENT : SERVER;
-        synchronized (src) {
-            return new HashSet<>(src);
-        }
+    public static Set<ZoneBlockEntity> loaded() {
+        return LOADED;
+    }
+
+    public static void clearLoaded() {
+        LOADED.clear();
     }
 
     public int width() { return width; }
@@ -45,6 +44,7 @@ public class ZoneBlockEntity extends BlockEntity {
         width = clamp(w);
         length = clamp(l);
         height = clamp(h);
+        box = null;
         setChanged();
         if (level != null) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
     }
@@ -53,22 +53,28 @@ public class ZoneBlockEntity extends BlockEntity {
         return Math.max(1, Math.min(SkinConfig.MAX_ZONE, v));
     }
 
+    private AABB box;
+
+    /** The zone area; built once and rebuilt only when the size changes. */
     public AABB box() {
-        double cx = worldPosition.getX() + 0.5, cz = worldPosition.getZ() + 0.5;
-        return new AABB(cx - width / 2.0, worldPosition.getY(), cz - length / 2.0, cx + width / 2.0, worldPosition.getY() + height, cz + length / 2.0);
+        AABB b = box;
+        if (b == null) {
+            double cx = worldPosition.getX() + 0.5, cz = worldPosition.getZ() + 0.5;
+            box = b = new AABB(cx - width / 2.0, worldPosition.getY(), cz - length / 2.0, cx + width / 2.0, worldPosition.getY() + height, cz + length / 2.0);
+        }
+        return b;
     }
 
     @Override
     public void setRemoved() {
         super.setRemoved();
-        SERVER.remove(this);
-        CLIENT.remove(this);
+        LOADED.remove(this);
     }
 
     @Override
     public void setLevel(Level level) {
         super.setLevel(level);
-        (level.isClientSide ? CLIENT : SERVER).add(this);
+        if (level.isClientSide) LOADED.add(this);
     }
 
     @Override
@@ -85,6 +91,7 @@ public class ZoneBlockEntity extends BlockEntity {
         if (tag.contains("w")) width = clamp(tag.getInt("w"));
         if (tag.contains("l")) length = clamp(tag.getInt("l"));
         if (tag.contains("h")) height = clamp(tag.getInt("h"));
+        box = null;
     }
 
     @Override

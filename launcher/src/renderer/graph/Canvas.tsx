@@ -12,7 +12,8 @@ import {
   type Node,
   type NodeChange
 } from '@xyflow/react'
-import { NODE_DEF_MAP, PIN_COLORS } from '../../shared/nodes'
+import { NODE_DEF_MAP, PIN_COLORS, pinVisible } from '../../shared/nodes'
+import type { BlockFaces } from '../../shared/ipc'
 import { useStore } from '../store'
 import { NodeView } from './NodeView'
 import { QuickAdd } from './QuickAdd'
@@ -21,6 +22,44 @@ import { WireEdge } from './WireEdge'
 const nodeTypes = { skin: NodeView }
 const edgeTypes = { wire: WireEdge }
 const snap = (n: number): number => Math.round(n / 16) * 16
+
+/** What the Game items panel puts on a dragged entry. */
+export interface DraggedAsset {
+  kind: 'block' | 'item' | 'texture'
+  ns: string
+  name: string
+  src: string
+  path: string
+  faces?: BlockFaces
+}
+
+const titleCase = (s: string): string => s.replace(/[_./-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).trim()
+
+/** A block or item dragged from Game items becomes a Block / item node; its textures are copied into the project. */
+async function dropAsset(raw: string, at: { x: number; y: number }): Promise<void> {
+  const st = useStore.getState()
+  try {
+    const a = JSON.parse(raw) as DraggedAsset
+    if (!st.dir || !['block', 'item', 'texture'].includes(a.kind) || typeof a.src !== 'string') return
+    // every texture the node needs, grouped by the jar it lives in
+    const refs: { src: string; path: string }[] =
+      a.kind === 'block' ? [a.faces?.side, a.faces?.top].filter((f): f is NonNullable<typeof f> => !!f).map((f) => ({ src: f.src, path: f.path })) : [{ src: a.src, path: a.path }]
+    const bySrc = new Map<string, string[]>()
+    for (const r of refs) bySrc.set(r.src, [...(bySrc.get(r.src) ?? []), r.path])
+    const names: Record<string, string> = {}
+    for (const [src, paths] of bySrc) Object.assign(names, await window.api.importAssets(st.dir, src, paths))
+    const side = a.kind === 'block' ? names[a.faces?.side?.path ?? ''] : names[a.path]
+    const top = a.kind === 'block' && a.faces?.top?.path !== a.faces?.side?.path ? names[a.faces?.top?.path ?? ''] : ''
+    const data: Record<string, unknown> =
+      a.kind === 'texture'
+        ? { kind: 'block', custom: true, name: titleCase(a.name), texture: side ?? '' }
+        : { kind: a.kind, gameId: `${a.ns}:${a.name}`, texture: side ?? '', textureTop: top ?? '' }
+    st.addNode('gameItem', { x: snap(at.x), y: snap(at.y) }, data)
+    window.dispatchEvent(new CustomEvent('cms:files'))
+  } catch (e) {
+    st.toast((e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), true)
+  }
+}
 
 export function Canvas(): React.JSX.Element {
   const nodes = useStore((s) => s.nodes)
@@ -59,7 +98,13 @@ export function Canvas(): React.JSX.Element {
     else s.setSelected(sel)
   }, [])
 
-  const flowEdges: Edge[] = edges.map((e) => {
+  // wires into a pin that is switched off are kept in the project but not drawn
+  const flowEdges: Edge[] = edges.filter((e) => {
+    const target = nodes.find((n) => n.id === e.target)
+    const def = target ? NODE_DEF_MAP[target.type] : undefined
+    const pin = def?.inputs.find((p) => p.id === e.targetHandle)
+    return !(def && target && pin && !pinVisible(def, pin, target.data))
+  }).map((e) => {
     const src = nodes.find((n) => n.id === e.source)
     const pin = src ? NODE_DEF_MAP[src.type]?.outputs.find((p) => p.id === e.sourceHandle) : undefined
     return { ...e, type: 'wire', sourceHandle: e.sourceHandle ?? null, targetHandle: e.targetHandle ?? null, style: { stroke: pin ? PIN_COLORS[pin.type] : undefined, strokeWidth: 2 } }
@@ -72,7 +117,7 @@ export function Canvas(): React.JSX.Element {
     if (!a || !b || a.id === b.id) return false
     const out = NODE_DEF_MAP[a.type]?.outputs.find((p) => p.id === c.sourceHandle)
     const inp = NODE_DEF_MAP[b.type]?.inputs.find((p) => p.id === c.targetHandle)
-    return !!out && !!inp && out.type === inp.type
+    return !!out && !!inp && out.type === inp.type && pinVisible(NODE_DEF_MAP[b.type], inp, b.data)
   }, [])
 
   const addAt = useCallback(
@@ -114,8 +159,14 @@ export function Canvas(): React.JSX.Element {
   return (
     <div
       className="canvas"
-      onDragOver={(e) => e.dataTransfer.types.includes('application/cms-node') && (e.preventDefault(), (e.dataTransfer.dropEffect = 'copy'))}
+      onDragOver={(e) => (e.dataTransfer.types.includes('application/cms-node') || e.dataTransfer.types.includes('application/cms-asset')) && (e.preventDefault(), (e.dataTransfer.dropEffect = 'copy'))}
       onDrop={(e) => {
+        const asset = e.dataTransfer.getData('application/cms-asset')
+        if (asset) {
+          e.preventDefault()
+          void dropAsset(asset, rf.screenToFlowPosition({ x: e.clientX - 100, y: e.clientY - 20 }))
+          return
+        }
         const type = e.dataTransfer.getData('application/cms-node')
         if (!type) return
         e.preventDefault()

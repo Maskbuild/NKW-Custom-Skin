@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ProjectSchema, defaultProject, migrateProject, toModId } from './schema'
-import { buildRuntimeConfig, collectPresets } from './config'
+import { buildRuntimeConfig, collectBlocks, collectPresets } from './config'
 import { validate } from './validate'
 
 describe('schema', () => {
@@ -33,12 +33,45 @@ describe('config', () => {
   const zoneOff = { enabled: false, mode: 'hint', message: 'Press {{button}} to change skin', width: 8, length: 8, height: 4 }
   it('uses node values and defaults', () => {
     const p = defaultProject('x1')
-    expect(buildRuntimeConfig(p)).toEqual({ maxSkins: 10, key: { enabled: true, default: 'K' }, block: { enabled: false, name: 'Skin Station' }, ...off, zone: { ...zoneOff, message: 'Press {{button}} to change your skin' } })
+    expect(buildRuntimeConfig(p)).toEqual({ maxSkins: 10, key: { enabled: true, default: 'K' }, block: { enabled: false, builtin: false, name: 'Skin Station', message: 'Right-click to change your skin', entries: [] }, ...off, zone: { ...zoneOff, message: 'Press {{button}} to change your skin' } })
     p.nodes[0].data = { unlimited: true, keyEnabled: false, blockEnabled: true, blockName: 'Wardrobe' }
     const c = buildRuntimeConfig(p)
     expect(c.maxSkins).toBe(-1)
     expect(c.key.enabled).toBe(false)
-    expect(c.block).toEqual({ enabled: true, name: 'Wardrobe' })
+    expect(c.block).toEqual({ enabled: true, builtin: true, name: 'Wardrobe', message: 'Right-click to change your skin', entries: [] })
+  })
+
+  it('uses the connected Block nodes instead of the built-in station', () => {
+    const p = defaultProject('x1')
+    p.nodes[0].data = { blockEnabled: true, blockMessage: 'Press right click' }
+    p.nodes.push(
+      { id: 'b1', type: 'gameItem', position: { x: 0, y: 0 }, data: { kind: 'block', gameId: 'minecraft:Crafting_Table' } },
+      { id: 'b2', type: 'gameItem', position: { x: 0, y: 0 }, data: { kind: 'block', custom: true, name: 'My Skin Block', texture: 'textures/a.png', textureTop: 'textures/b.png' } },
+      { id: 'b3', type: 'gameItem', position: { x: 0, y: 0 }, data: { kind: 'item', gameId: 'minecraft:apple' } }, // items cannot be skin blocks
+      { id: 'b4', type: 'gameItem', position: { x: 0, y: 0 }, data: { kind: 'block', gameId: 'minecraft:stone' } } // not connected
+    )
+    for (const id of ['b1', 'b2', 'b3']) p.edges.push({ id: 'e' + id, source: id, sourceHandle: 'block', target: 'wardrobe-1', targetHandle: 'blocks' })
+    const c = buildRuntimeConfig(p).block
+    expect(c.builtin).toBe(false)
+    expect(c.message).toBe('Press right click')
+    expect(c.entries).toEqual([
+      { id: '', vanilla: 'minecraft:crafting_table', name: 'My Skin Block' },
+      { id: 'my_skin_block', vanilla: '', name: 'My Skin Block' }
+    ])
+    expect(collectBlocks(p)[1]).toMatchObject({ texture: 'textures/a.png', textureTop: 'textures/b.png' })
+    // switched off: the wires are ignored and the built-in block is back
+    p.nodes[0].data = { blockEnabled: false }
+    expect(collectBlocks(p)).toEqual([])
+  })
+
+  it('gives two custom blocks with the same name different ids', () => {
+    const p = defaultProject('x1')
+    p.nodes[0].data = { blockEnabled: true }
+    for (const id of ['a', 'b']) {
+      p.nodes.push({ id, type: 'gameItem', position: { x: 0, y: 0 }, data: { kind: 'block', custom: true, name: 'Crate', texture: 'textures/a.png' } })
+      p.edges.push({ id: 'e' + id, source: id, sourceHandle: 'block', target: 'wardrobe-1', targetHandle: 'blocks' })
+    }
+    expect(collectBlocks(p).map((b) => b.id)).toEqual(['crate', 'crate_2'])
   })
   it('flags the optional add-ons', () => {
     const p = defaultProject('x1')

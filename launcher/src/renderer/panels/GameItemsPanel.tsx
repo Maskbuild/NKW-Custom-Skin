@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { useT } from '../i18n'
-import type { AssetEntry, AssetSource, DownloadProgress } from '../../shared/ipc'
+import { BlockCube } from '../components/BlockCube'
+import type { DraggedAsset } from '../graph/Canvas'
+import type { AssetEntry, AssetSource, BlockFaces, DownloadProgress } from '../../shared/ipc'
 
-type Tab = 'block' | 'item' | 'model'
-const PAGE = 60
+type Tab = 'block' | 'item' | 'texture' | 'model'
+const PAGE = 48
 
 const label = (e: AssetEntry): string => (e.ns === 'minecraft' ? e.name : `${e.ns}:${e.name}`)
 const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
-/** Blocks, items, models and textures from Minecraft and from mods, ready to be copied into the project. */
+/** Blocks, items, models and textures from Minecraft and from mods: shown like the game shows them, draggable into the graph. */
 export function GameItemsPanel(): React.JSX.Element {
   const t = useT()
   const dir = useStore((s) => s.dir)!
@@ -18,6 +20,7 @@ export function GameItemsPanel(): React.JSX.Element {
   const [src, setSrc] = useState(`mc:${mc}`)
   const [entries, setEntries] = useState<AssetEntry[]>([])
   const [thumbs, setThumbs] = useState<Record<string, string>>({})
+  const [faces, setFaces] = useState<Record<string, BlockFaces>>({})
   const [tab, setTab] = useState<Tab>('block')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(0)
@@ -26,7 +29,7 @@ export function GameItemsPanel(): React.JSX.Element {
   const [progress, setProgress] = useState<DownloadProgress | null>(null)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
-  const asked = useRef(new Set<string>()) // thumbnail batches already requested
+  const asked = useRef(new Set<string>()) // batches already requested
 
   const reloadSources = useCallback(async (): Promise<AssetSource[]> => {
     const list = await window.api.assetSources(dir, mc)
@@ -39,6 +42,7 @@ export function GameItemsPanel(): React.JSX.Element {
     setSrc(`mc:${mc}`)
     setEntries([])
     setThumbs({})
+    setFaces({})
     asked.current.clear()
     setSel(new Set())
     reloadSources().catch((e) => setErr(errText(e)))
@@ -80,26 +84,31 @@ export function GameItemsPanel(): React.JSX.Element {
 
   const shown = useMemo(() => {
     const n = q.trim().toLowerCase()
-    return entries.filter((e) => (tab === 'model' ? e.kind === 'model' : e.kind === 'texture' && e.group === tab) && (!n || label(e).toLowerCase().includes(n)))
+    const inTab = (e: AssetEntry): boolean =>
+      tab === 'block' ? e.kind === 'block' : tab === 'model' ? e.kind === 'model' : tab === 'item' ? e.kind === 'texture' && e.group === 'item' : e.kind === 'texture' && e.group === 'block'
+    return entries.filter((e) => inTab(e) && (!n || label(e).toLowerCase().includes(n)))
   }, [entries, tab, q])
   const pages = Math.max(1, Math.ceil(shown.length / PAGE))
   const visible = shown.slice(page * PAGE, page * PAGE + PAGE)
 
-  // thumbnails for the visible textures, one batch per page
+  // pictures for the visible page: textures as they are, blocks as cubes built from their model
   useEffect(() => {
-    const need = visible.filter((e) => e.kind === 'texture' && !thumbs[e.path]).map((e) => e.path)
-    const key = `${src}|${need.join(',')}`
-    if (!need.length || asked.current.has(key)) return
+    const flat = visible.filter((e) => e.kind === 'texture' && !thumbs[e.path]).map((e) => e.path)
+    const cubes = visible.filter((e) => e.kind === 'block' && !faces[e.path]).map((e) => e.path)
+    const key = `${src}|${flat.join(',')}|${cubes.join(',')}`
+    if ((!flat.length && !cubes.length) || asked.current.has(key)) return
     asked.current.add(key)
     let live = true
-    window.api
-      .thumbnails(dir, src, need)
-      .then((r) => live && setThumbs((old) => ({ ...old, ...r })))
-      .catch((e) => live && setErr(errText(e)))
+    if (flat.length) {
+      window.api.thumbnails(dir, src, flat).then((r) => live && setThumbs((old) => ({ ...old, ...r }))).catch((e) => live && setErr(errText(e)))
+    }
+    if (cubes.length) {
+      window.api.blockFaces(dir, src, mc, cubes).then((r) => live && setFaces((old) => ({ ...old, ...r }))).catch((e) => live && setErr(errText(e)))
+    }
     return () => {
       live = false
     }
-  }, [visible, thumbs, dir, src])
+  }, [visible, thumbs, faces, dir, src, mc])
 
   const toggle = (p: string): void =>
     setSel((old) => {
@@ -121,13 +130,28 @@ export function GameItemsPanel(): React.JSX.Element {
     }
   }
 
+  /** Selected blocks bring their top and side textures; everything else is copied as it is. */
   const importSelected = (): Promise<void> =>
     run(async () => {
-      const added = await window.api.importAssets(dir, src, [...sel])
+      const bySrc = new Map<string, Set<string>>()
+      const add = (s: string, p: string): void => void bySrc.set(s, (bySrc.get(s) ?? new Set()).add(p))
+      for (const p of sel) {
+        const e = entries.find((x) => x.path === p)
+        if (!e) continue
+        if (e.kind !== 'block') add(src, p)
+        else for (const f of [faces[p]?.top, faces[p]?.side]) if (f) add(f.src, f.path)
+      }
+      let count = 0
+      for (const [s, paths] of bySrc) count += Object.keys(await window.api.importAssets(dir, s, [...paths])).length
       setSel(new Set())
       window.dispatchEvent(new CustomEvent('cms:files'))
-      useStore.getState().toast(`✓ ${t('items.imported', { n: added.length })}`)
+      useStore.getState().toast(`✓ ${t('items.imported', { n: count })}`)
     })
+
+  const dragPayload = (e: AssetEntry): DraggedAsset | null => {
+    if (e.kind === 'model') return null
+    return { kind: e.kind === 'block' ? 'block' : e.group === 'item' ? 'item' : 'texture', ns: e.ns, name: e.name, src, path: e.path, faces: faces[e.path] }
+  }
 
   return (
     <div className="panel-pad gi">
@@ -165,18 +189,40 @@ export function GameItemsPanel(): React.JSX.Element {
       {entries.length > 0 && (
         <>
           <div className="seg">
-            {(['block', 'item', 'model'] as Tab[]).map((k) => (
+            {(['block', 'item', 'texture', 'model'] as Tab[]).map((k) => (
               <button key={k} className={tab === k ? 'on' : ''} onClick={() => { setTab(k); setPage(0) }}>{t(`items.${k}`)}</button>
             ))}
           </div>
           <input className="input" placeholder={t('items.search')} value={q} onChange={(e) => { setQ(e.target.value); setPage(0) }} />
+          <p className="hint">{t('items.dragHint')}</p>
           <div className="asset-grid">
-            {visible.map((e) => (
-              <button key={e.path} className={`asset${sel.has(e.path) ? ' on' : ''}`} title={`${label(e)}\n${e.path}`} onClick={() => toggle(e.path)}>
-                {e.kind === 'texture' ? thumbs[e.path] ? <img className="pixel" src={thumbs[e.path]} alt="" draggable={false} /> : <span className="ph" /> : <span className="model">{ '{ }' }</span>}
-                <small className="ellipsis">{label(e)}</small>
-              </button>
-            ))}
+            {visible.map((e) => {
+              const payload = dragPayload(e)
+              const f = faces[e.path]
+              return (
+                <button
+                  key={e.path}
+                  className={`asset${sel.has(e.path) ? ' on' : ''}`}
+                  title={`${label(e)}\n${e.path}`}
+                  draggable={!!payload}
+                  onDragStart={(ev) => {
+                    if (!payload) return ev.preventDefault()
+                    ev.dataTransfer.setData('application/cms-asset', JSON.stringify(payload))
+                    ev.dataTransfer.effectAllowed = 'copy'
+                  }}
+                  onClick={() => toggle(e.path)}
+                >
+                  {e.kind === 'block' ? (
+                    f ? <BlockCube top={f.top?.url} side={f.side?.url} size={48} /> : <span className="ph" />
+                  ) : e.kind === 'texture' ? (
+                    thumbs[e.path] ? <img className="pixel" src={thumbs[e.path]} alt="" draggable={false} /> : <span className="ph" />
+                  ) : (
+                    <span className="model">{'{ }'}</span>
+                  )}
+                  <small className="ellipsis">{label(e)}</small>
+                </button>
+              )
+            })}
           </div>
           {shown.length === 0 && <div className="empty">{t('items.none')}</div>}
           <div className="row">

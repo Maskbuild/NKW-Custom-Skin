@@ -45,12 +45,6 @@ public final class Messages {
         static ZoneConfig read(FriendlyByteBuf b) { return new ZoneConfig(b.readBlockPos(), b.readVarInt(), b.readVarInt(), b.readVarInt()); }
     }
 
-    /** server -> client: whether the player stands inside a skin zone. */
-    public record ZoneState(boolean inside) implements Msg {
-        public void write(FriendlyByteBuf b) { b.writeBoolean(inside); }
-        static ZoneState read(FriendlyByteBuf b) { return new ZoneState(b.readBoolean()); }
-    }
-
     /** client -> server: stop using a custom skin. */
     public record Reset() implements Msg {
         public void write(FriendlyByteBuf b) {}
@@ -79,6 +73,5 @@ public final class Messages {
         net.s2c("announce", Announce.class, Announce::read, m -> ClientNet.onAnnounce(m));
         net.s2c("download", Download.class, Download::read, m -> ClientNet.onDownload(m));
         net.s2c("speak_state", SpeakState.class, SpeakState::read, m -> ClientNet.onSpeakState(m));
-        net.s2c("zone_state", ZoneState.class, ZoneState::read, m -> ClientNet.onZoneState(m));
     }
 }

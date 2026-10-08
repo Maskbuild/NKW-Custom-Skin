@@ -65,3 +65,37 @@ describe('exporter', () => {
     expect(fs.readFileSync(path.join(work, 'src/main/resources/assets/skinmod/textures/block/skin_station.png'), 'utf8')).toBe('custom-texture')
   })
 })
+
+describe('blocks of our own', () => {
+  it('writes state, models, texture, lang and loot table for each custom block', () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'render-'))
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'proj-'))
+    fs.mkdirSync(path.join(proj, 'textures'))
+    fs.writeFileSync(path.join(proj, 'textures', 'side.png'), 'side')
+    fs.writeFileSync(path.join(proj, 'textures', 'top.png'), 'top')
+    const p = defaultProject('Crates')
+    p.nodes[0].data = { blockEnabled: true }
+    p.nodes.push(
+      { id: 'c', type: 'gameItem', position: { x: 0, y: 0 }, data: { kind: 'block', custom: true, name: 'Dressing Crate', texture: 'textures/side.png', textureTop: 'textures/top.png' } },
+      { id: 'v', type: 'gameItem', position: { x: 0, y: 0 }, data: { kind: 'block', gameId: 'minecraft:crafting_table' } }
+    )
+    for (const id of ['c', 'v']) p.edges.push({ id: 'e' + id, source: id, sourceHandle: 'block', target: 'wardrobe-1', targetHandle: 'blocks' })
+    renderProject(p, proj, work)
+    const res = path.join(work, 'src/main/resources')
+    const a = path.join(res, 'assets/skinmod')
+    expect(fs.readFileSync(path.join(a, 'textures/block/dressing_crate.png'), 'utf8')).toBe('side')
+    expect(fs.readFileSync(path.join(a, 'textures/block/dressing_crate_top.png'), 'utf8')).toBe('top')
+    expect(JSON.parse(fs.readFileSync(path.join(a, 'models/block/dressing_crate.json'), 'utf8')).parent).toBe('minecraft:block/cube_column')
+    expect(fs.existsSync(path.join(a, 'blockstates/dressing_crate.json'))).toBe(true)
+    expect(fs.existsSync(path.join(a, 'items/dressing_crate.json'))).toBe(true)
+    expect(fs.existsSync(path.join(res, 'data/skinmod/loot_table/blocks/dressing_crate.json'))).toBe(true)
+    expect(fs.existsSync(path.join(res, 'data/skinmod/loot_tables/blocks/dressing_crate.json'))).toBe(true)
+    expect(JSON.parse(fs.readFileSync(path.join(a, 'lang/en_us.json'), 'utf8'))['block.skinmod.dressing_crate']).toBe('Dressing Crate')
+    const cfg = JSON.parse(fs.readFileSync(path.join(res, 'skinmod.config.json'), 'utf8'))
+    expect(cfg.block.builtin).toBe(false)
+    expect(cfg.block.entries).toEqual([
+      { id: 'dressing_crate', vanilla: '', name: 'Dressing Crate' },
+      { id: '', vanilla: 'minecraft:crafting_table', name: 'My Skin Block' }
+    ])
+  })
+})

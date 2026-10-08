@@ -1,10 +1,12 @@
 package dev.custommodskin.runtime.forge;
 
 import dev.custommodskin.runtime.server.ServerSkins;
-import dev.custommodskin.runtime.server.ZoneTracker;
+import dev.custommodskin.runtime.block.SkinBlocks;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.event.TickEvent;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -23,9 +25,13 @@ public final class ForgeEvents {
         ServerSkins.onServerStopping();
     }
 
+    /** A game block turned into a skin block: the click opens the wardrobe instead of the block's own screen. */
     @SubscribeEvent
-    public static void onServerTick(TickEvent.ServerTickEvent.Post event) {
-        ZoneTracker.onServerTick(event.getServer());
+    public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
+        if (event.getHand() == InteractionHand.MAIN_HAND && SkinBlocks.handleUse(event.getLevel(), event.getEntity(), event.getPos())) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.SUCCESS);
+        }
     }
 
     @SubscribeEvent
@@ -37,7 +43,6 @@ public final class ForgeEvents {
     public static void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer p) {
             ServerSkins.onDisconnect(p);
-            ZoneTracker.onDisconnect(p);
         }
     }
 }

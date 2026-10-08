@@ -10,6 +10,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShapeRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.debug.DebugRenderer;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
@@ -17,19 +18,19 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/** Client side of skin zones: hotbar hint / auto-open, marker icons, and the outline shown to creative builders. */
+import java.util.Set;
+
+/** Client side of skin zones: the player is inside / not, the hint, the instant window, and the builder's view of the zones. */
 public final class ZoneClient {
     private static boolean inside;
     /** the window was opened or dismissed for this visit; do not reopen until the player leaves */
     private static boolean handled;
-    private static int markerTick;
+
+    /** Set by loaders that draw the zones themselves; the others get a few particles instead. */
+    public static boolean outlineDrawnByLoader = false;
+    private static int particleTick;
 
     private ZoneClient() {}
-
-    public static void setInside(boolean now) {
-        inside = now;
-        if (!now) handled = false;
-    }
 
     public static boolean isInside() { return inside; }
 
@@ -46,70 +47,73 @@ public final class ZoneClient {
                 && (mc.player.getMainHandItem().is(SkinBlocks.ZONE_ITEM) || mc.player.getOffhandItem().is(SkinBlocks.ZONE_ITEM));
     }
 
-    /** Marker icons at every zone block while the item is held (they have no model of their own). */
-    private static void markers(Minecraft mc) {
-        if (mc.level == null || !holdingZoneItem(mc)) { markerTick = 0; return; }
-        if (markerTick++ % 60 != 0) return; // the particle lives 80 ticks
-        for (ZoneBlockEntity z : ZoneBlockEntity.loaded(true)) {
-            if (z.isRemoved() || z.getBlockPos().distSqr(mc.player.blockPosition()) > 48 * 48) continue;
-            mc.level.addParticle(new BlockParticleOption(ParticleTypes.BLOCK_MARKER, z.getBlockState()),
-                    z.getBlockPos().getX() + 0.5, z.getBlockPos().getY() + 0.5, z.getBlockPos().getZ() + 0.5, 0, 0, 0);
+    /** Worked out here from the zone blocks the client has loaded, so the hint comes and goes at once. */
+    private static void updateInside(Minecraft mc) {
+        boolean now = false;
+        Set<ZoneBlockEntity> zones = ZoneBlockEntity.loaded();
+        if (!zones.isEmpty()) {
+            Vec3 p = mc.player.position().add(0, 0.1, 0);
+            for (ZoneBlockEntity z : zones) {
+                if (!z.isRemoved() && z.getLevel() == mc.level && z.box().contains(p)) { now = true; break; }
+            }
         }
-    }
-
-    /** Set by loaders that draw the outline themselves; the others get particles along the edges. */
-    public static boolean outlineDrawnByLoader = false;
-    private static int edgeTick;
-
-    /** The zone edges as green dust, for loaders without a usable world-render event. */
-    private static void edgeParticles(Minecraft mc) {
-        if (outlineDrawnByLoader || mc.level == null || !holdingZoneItem(mc) || !SkinConfig.zoneEnabled()) { edgeTick = 0; return; }
-        if (edgeTick++ % 10 != 0) return;
-        var dust = new DustParticleOptions(0x40FF73, 1.0f);
-        for (ZoneBlockEntity z : ZoneBlockEntity.loaded(true)) {
-            if (z.isRemoved() || z.getBlockPos().distSqr(mc.player.blockPosition()) > 48 * 48) continue;
-            AABB b = z.box();
-            double[] xs = {b.minX, b.maxX}, ys = {b.minY, b.maxY}, zs = {b.minZ, b.maxZ};
-            for (double y : ys) for (double zz : zs) line(mc, dust, b.minX, y, zz, b.maxX, y, zz);
-            for (double x : xs) for (double zz : zs) line(mc, dust, x, b.minY, zz, x, b.maxY, zz);
-            for (double x : xs) for (double y : ys) line(mc, dust, x, y, b.minZ, x, y, b.maxZ);
-        }
-    }
-
-    private static void line(Minecraft mc, DustParticleOptions dust, double x1, double y1, double z1, double x2, double y2, double z2) {
-        double len = Math.max(Math.abs(x2 - x1), Math.max(Math.abs(y2 - y1), Math.abs(z2 - z1)));
-        int n = (int) Math.min(24, Math.max(2, Math.ceil(len)));
-        for (int i = 0; i <= n; i++) {
-            double t = i / (double) n;
-            mc.level.addParticle(dust, x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, z1 + (z2 - z1) * t, 0, 0, 0);
+        if (now != inside) {
+            inside = now;
+            if (!now) handled = false;
         }
     }
 
     /** Every client tick (loader hook). */
-    public static void tick(Minecraft mc, KeyMapping openKey) {
-        markers(mc);
-        edgeParticles(mc);
-        if (!inside || mc.player == null || mc.level == null) return;
-        if ("instant".equals(SkinConfig.zoneMode())) {
-            if (!handled && mc.screen == null) {
-                handled = true;
-                mc.setScreen(new SkinScreen());
+    public static void tick(Minecraft mc) {
+        if (!SkinConfig.zoneEnabled() || mc.player == null || mc.level == null) {
+            reset();
+            return;
+        }
+        updateInside(mc);
+        if (inside && !handled && "instant".equals(SkinConfig.zoneMode()) && mc.screen == null) {
+            handled = true;
+            mc.setScreen(new SkinScreen());
+        }
+        particles(mc);
+    }
+
+    /** The hotbar message for the zone the player is in, or null. */
+    static Component hint(KeyMapping openKey) {
+        if (!inside || !"hint".equals(SkinConfig.zoneMode())) return null;
+        String key = openKey != null ? openKey.getTranslatedKeyMessage().getString() : "K";
+        return Component.literal(SkinConfig.zoneMessage().replace("{{button}}", key));
+    }
+
+    /** Without a world-render event: a marker per zone block and the vertical edges, a few at a time. */
+    private static void particles(Minecraft mc) {
+        if (outlineDrawnByLoader || !holdingZoneItem(mc)) { particleTick = 0; return; }
+        if (particleTick++ % 20 != 0) return;
+        var dust = new DustParticleOptions(0x40FF73, 1.0f);
+        int budget = 160;
+        for (ZoneBlockEntity z : ZoneBlockEntity.loaded()) {
+            if (z.isRemoved() || budget <= 0 || z.getBlockPos().distSqr(mc.player.blockPosition()) > 32 * 32) continue;
+            mc.level.addParticle(new BlockParticleOption(ParticleTypes.BLOCK_MARKER, z.getBlockState()), z.getBlockPos().getX() + 0.5, z.getBlockPos().getY() + 0.5, z.getBlockPos().getZ() + 0.5, 0, 0, 0);
+            AABB b = z.box();
+            double[] xs = {b.minX, b.maxX}, zs = {b.minZ, b.maxZ};
+            int n = (int) Math.min(12, Math.max(2, Math.ceil((b.maxY - b.minY) / 2)));
+            for (double x : xs) for (double zz : zs) for (int i = 0; i <= n && budget-- > 0; i++) {
+                mc.level.addParticle(dust, x, b.minY + (b.maxY - b.minY) * i / n, zz, 0, 0, 0);
             }
-        } else if (mc.screen == null) {
-            String key = openKey != null ? openKey.getTranslatedKeyMessage().getString() : "K";
-            mc.gui.setOverlayMessage(Component.literal(SkinConfig.zoneMessage().replace("{{button}}", key)), false);
         }
     }
 
-    /** Draws the zone boxes while the item is held; the loader calls this from its world-render event. */
+    /**
+     * Draws the zones while the item is held: the block itself as a green cube, and the whole area as an outline.
+     * The loader calls this from its world-render event.
+     */
     public static void renderOutline(PoseStack pose, MultiBufferSource buffers, Vec3 cam) {
         Minecraft mc = Minecraft.getInstance();
         if (!SkinConfig.zoneEnabled() || !holdingZoneItem(mc)) return;
-        VertexConsumer vc = buffers.getBuffer(RenderType.lines());
-        for (ZoneBlockEntity z : ZoneBlockEntity.loaded(true)) {
+        VertexConsumer lines = buffers.getBuffer(RenderType.lines());
+        for (ZoneBlockEntity z : ZoneBlockEntity.loaded()) {
             if (z.isRemoved() || z.getBlockPos().distToCenterSqr(cam) > 96 * 96) continue;
-            AABB b = z.box().move(-cam.x, -cam.y, -cam.z);
-            ShapeRenderer.renderLineBox(pose, vc, b, 0.25f, 1.0f, 0.45f, 1.0f);
+            DebugRenderer.renderFilledBox(pose, buffers, new AABB(z.getBlockPos()).inflate(0.002).move(-cam.x, -cam.y, -cam.z), 0.25f, 1.0f, 0.45f, 0.55f);
+            ShapeRenderer.renderLineBox(pose, lines, z.box().move(-cam.x, -cam.y, -cam.z), 0.25f, 1.0f, 0.45f, 1.0f);
         }
     }
 }
