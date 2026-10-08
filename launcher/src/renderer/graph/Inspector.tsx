@@ -57,7 +57,38 @@ function ModProps(): React.JSX.Element {
       </div>
       <div className="field">
         <label>{t('insp.desc')}</label>
-        <textarea className="input" rows={3} value={meta.description} onChange={(e) => set({ description: e.target.value })} />
+        <textarea className="input" rows={2} value={meta.description} onChange={(e) => set({ description: e.target.value })} />
+      </div>
+      <div className="field">
+        <label>{t('insp.authors')}</label>
+        <input className="input" placeholder={t('insp.authorsPlaceholder')} value={meta.authors ?? ''} onChange={(e) => set({ authors: e.target.value })} />
+      </div>
+      <div className="field">
+        <label>{t('insp.license')}</label>
+        <textarea className="input" rows={2} placeholder={t('insp.licensePlaceholder')} value={meta.license ?? ''} onChange={(e) => set({ license: e.target.value })} />
+        <div className="row wrap" style={{ marginTop: 4, gap: 4 }}>
+          <button
+            type="button"
+            className="btn xs"
+            onClick={() => set({ license: 'All Rights Reserved - Name Kueap Wan Project Only (ห้ามใช้ยกเว้นกลุ่ม Name Kueap Wan หรือได้รับอนุญาต)' })}
+          >
+            {t('insp.licenseNkwPreset')}
+          </button>
+          <button
+            type="button"
+            className="btn xs"
+            onClick={() => set({ license: 'All Rights Reserved' })}
+          >
+            All Rights Reserved
+          </button>
+          <button
+            type="button"
+            className="btn xs"
+            onClick={() => set({ license: 'MIT' })}
+          >
+            MIT
+          </button>
+        </div>
       </div>
       <div className="field">
         <label>{t('insp.logo')}</label>

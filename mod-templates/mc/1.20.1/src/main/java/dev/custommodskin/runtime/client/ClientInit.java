@@ -22,9 +22,11 @@ public final class ClientInit {
     public static void init() {
         SkinBlocks.openWardrobe = () -> Minecraft.getInstance().setScreen(new SkinScreen());
         SkinBlocks.openZoneEditor = be -> Minecraft.getInstance().setScreen(new ZoneScreen(be));
-        // The key opens the wardrobe everywhere, unless the mod has skin zones: then it only works inside one
-        // (and it must exist anyway, so the zone hint can name it).
-        if (SkinConfig.keyEnabled() || SkinConfig.zoneEnabled()) {
+        // The key opens the wardrobe everywhere, unless the mod has skin zones or a skin block:
+        // then the key is only registered if allowed or needed for the zone hint.
+        boolean needKey = (SkinConfig.keyEnabled() && !SkinConfig.blockEnabled())
+                || (SkinConfig.zoneEnabled() && "hint".equals(SkinConfig.zoneMode()));
+        if (needKey) {
             OPEN_KEY = new KeyMapping("key.skinmod.open", InputConstants.Type.KEYSYM, glfwKey(SkinConfig.defaultKey()), "key.categories.skinmod");
         }
         if (SkinConfig.plasmoEnabled()) PlasmoBridge.init();

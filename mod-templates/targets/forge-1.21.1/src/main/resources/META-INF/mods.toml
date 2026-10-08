@@ -1,11 +1,12 @@
 modLoader="javafml"
 loaderVersion="[0,)"
-license="All Rights Reserved"
+license="${mod_license}"
 
 [[mods]]
 modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
+authors="${mod_authors}"
 logoFile="assets/skinmod/icon.png"
 description='''${mod_description}'''
 

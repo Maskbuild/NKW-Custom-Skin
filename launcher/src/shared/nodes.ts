@@ -83,16 +83,34 @@ export const NODE_DEFS: NodeDef[] = [
     ],
     outputs: [],
     props: [
-      { key: 'keyEnabled', label: t('Open with a key', 'เปิดด้วยปุ่ม'), kind: 'bool', default: true, showIf: { key: 'blockEnabled', eq: false }, hint: t('Not available with a skin block: the block opens the window instead.', 'ใช้ไม่ได้เมื่อใช้บล็อกเปลี่ยนสกิน: ให้คลิกที่บล็อกแทน') },
+      {
+        key: 'keyEnabled',
+        label: t('Open with a hotkey', 'เปิดด้วยปุ่มลัด (คีย์บอร์ด)'),
+        kind: 'bool',
+        default: true,
+        hint: t(
+          'Allow opening the wardrobe anywhere with a hotkey (default K). Turn off to require a block or zone.',
+          'อนุญาตให้เปิดตู้เสื้อผ้าด้วยปุ่มลัดที่ไหนก็ได้ ปิดหากต้องการให้เปิดได้เฉพาะเมื่อคลิกขวาที่บล็อกหรือเข้าพื้นที่เท่านั้น'
+        )
+      },
       {
         key: 'key',
         label: t('Default key', 'ปุ่มเริ่มต้น'),
         kind: 'key',
         default: 'K',
-        showIf: [{ key: 'keyEnabled', eq: true }, { key: 'blockEnabled', eq: false }],
+        showIf: { key: 'keyEnabled', eq: true },
         hint: t('Players can rebind it in Controls.', 'ผู้เล่นเปลี่ยนได้ในหน้าตั้งค่าปุ่ม')
       },
-      { key: 'blockEnabled', label: t('Skin changing block', 'บล็อกเปลี่ยนสกิน'), kind: 'bool', default: false, hint: t('Right-click the block to open the window. Connect Block nodes to choose which blocks do it; with none, a built-in Skin Station block is added. The key stops working.', 'คลิกขวาที่บล็อกเพื่อเปิดหน้าต่าง ต่อโหนดบล็อกเพื่อเลือกว่าบล็อกไหน ถ้าไม่ต่อจะมีบล็อก Skin Station ให้เอง ปุ่มกดจะใช้ไม่ได้') },
+      {
+        key: 'blockEnabled',
+        label: t('Skin changing block', 'บล็อกเปลี่ยนสกิน (คลิกขวา)'),
+        kind: 'bool',
+        default: false,
+        hint: t(
+          'Right-click the block to open the window. Connect Block nodes to choose which blocks do it; with none, a built-in Skin Station block is added.',
+          'คลิกขวาที่บล็อกเพื่อเปิดหน้าต่าง ต่อโหนดบล็อกเพื่อเลือกว่าบล็อกไหน ถ้าไม่ต่อจะมีบล็อก Skin Station ให้เอง'
+        )
+      },
       { key: 'blockMessage', label: t('Message when looking at the block', 'ข้อความเมื่อมองที่บล็อก'), kind: 'text', default: 'Right-click to change your skin', showIf: { key: 'blockEnabled', eq: true } },
       { key: 'blockName', label: t('Built-in block name', 'ชื่อบล็อกในตัว'), kind: 'text', default: 'Skin Station', showIf: { key: 'blockEnabled', eq: true }, hint: t('Used when no Block node is connected.', 'ใช้เมื่อไม่ได้ต่อโหนดบล็อก') },
       {
@@ -152,10 +170,10 @@ export const NODE_DEFS: NodeDef[] = [
         key: 'mode',
         label: t('When a player enters', 'เมื่อผู้เล่นเข้าพื้นที่'),
         kind: 'select',
-        default: 'hint',
+        default: 'instant',
         options: [
-          { value: 'hint', label: t('Show a hint on the hotbar', 'แสดงข้อความบน hotbar') },
-          { value: 'instant', label: t('Open the window at once (closes on leave)', 'เปิดหน้าต่างทันที (ปิดเมื่อออก)') }
+          { value: 'instant', label: t('Open the window at once (closes on leave)', 'เปิดหน้าต่างทันที (ปิดเมื่อออก)') },
+          { value: 'hint', label: t('Show a hint on the hotbar', 'แสดงข้อความบน hotbar') }
         ]
       },
       {

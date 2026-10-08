@@ -73,6 +73,8 @@ public final class ZoneClient {
         if (inside && !handled && "instant".equals(SkinConfig.zoneMode()) && mc.screen == null) {
             handled = true;
             mc.setScreen(new SkinScreen());
+        } else if (!inside && "instant".equals(SkinConfig.zoneMode()) && mc.screen instanceof SkinScreen) {
+            mc.setScreen(null);
         }
         particles(mc);
     }

@@ -30,7 +30,7 @@ describe('schema', () => {
 
 describe('config', () => {
   const off = { figura: { enabled: false }, plasmo: { enabled: false } }
-  const zoneOff = { enabled: false, mode: 'hint', message: 'Press {{button}} to change skin', width: 8, length: 8, height: 4 }
+  const zoneOff = { enabled: false, mode: 'instant', message: 'Press {{button}} to change skin', width: 8, length: 8, height: 4 }
   it('uses node values and defaults', () => {
     const p = defaultProject('x1')
     expect(buildRuntimeConfig(p)).toEqual({ maxSkins: 10, key: { enabled: true, default: 'K' }, block: { enabled: false, builtin: false, name: 'Skin Station', message: 'Right-click to change your skin', entries: [] }, ...off, zone: { ...zoneOff, message: 'Press {{button}} to change your skin' } })
@@ -106,7 +106,7 @@ describe('validate', () => {
   })
   it('warns that the key is zone-only when a zone exists', () => {
     const p = defaultProject('x1')
-    p.nodes.push({ id: 'z', type: 'skinZone', position: { x: 0, y: 0 }, data: {} })
+    p.nodes.push({ id: 'z', type: 'skinZone', position: { x: 0, y: 0 }, data: { mode: 'hint' } })
     expect(validate(p).some((d) => d.nodeId === 'wardrobe-1' && d.severity === 'warning')).toBe(true)
   })
   it('reports unknown node types as warnings and ignores them', () => {

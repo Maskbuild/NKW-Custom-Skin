@@ -90,7 +90,7 @@ export function buildRuntimeConfig(p: Project): ModRuntimeConfig {
     plasmo: { enabled: live.some((n) => n.type === 'plasmoVoice') },
     zone: {
       enabled: !!z,
-      mode: zget('mode') === 'instant' ? 'instant' : 'hint',
+      mode: zget('mode') === 'hint' ? 'hint' : 'instant',
       message: String(zget('message') ?? ''),
       width: Number(zget('width')),
       length: Number(zget('length')),

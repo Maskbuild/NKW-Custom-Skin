@@ -51,6 +51,7 @@ processResources {
     filteringCharset = 'UTF-8'
     def props = [mod_id: project.mod_id, mod_name: project.mod_name,
                  mod_version: project.mod_version, mod_description: project.mod_description,
+                 mod_authors: project.mod_authors, mod_license: project.mod_license,
                  minecraft_version: project.minecraft_version, pack_format: project.pack_format]
     inputs.properties props
     filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) { expand props }

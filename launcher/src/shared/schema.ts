@@ -54,6 +54,8 @@ export const MetaSchema = z.object({
   modId: z.string().regex(/^[a-z][a-z0-9_]{1,63}$/),
   modVersion: z.string().regex(/^[0-9A-Za-z][0-9A-Za-z.+_-]{0,31}$/),
   description: z.string().default(''),
+  authors: z.string().default(''),
+  license: z.string().default(''),
   logo: z.string().optional(), // path relative to the project folder
   loader: z.enum(LOADERS),
   mcVersion: z.enum(MC_VERSIONS)
@@ -107,6 +109,8 @@ export const defaultProject = (name: string): Project => ({
     modId: toModId(name),
     modVersion: '1.0.0',
     description: 'HD skin support',
+    authors: '',
+    license: 'All Rights Reserved - Name Kueap Wan Project Only (ห้ามใช้ยกเว้นกลุ่ม Name Kueap Wan หรือได้รับอนุญาต)',
     loader: 'fabric',
     mcVersion: '1.21.1'
   },

@@ -100,6 +100,8 @@ export function renderProject(project: Project, projectDir: string, workDir: str
 
   const propsFile = path.join(workDir, 'gradle.properties')
   const m = project.meta
+  const authors = cleanText(m.authors ?? '')
+  const license = cleanText(m.license ?? '') || 'All Rights Reserved'
   fs.writeFileSync(
     propsFile,
     setProperties(fs.readFileSync(propsFile, 'utf8'), {
@@ -107,6 +109,8 @@ export function renderProject(project: Project, projectDir: string, workDir: str
       mod_name: cleanText(m.name) || m.modId,
       mod_version: m.modVersion,
       mod_description: cleanText(m.description) || cleanText(m.name) || m.modId,
+      mod_authors: authors || 'Unknown',
+      mod_license: license,
       archives_base_name: m.modId
     })
   )

@@ -66,10 +66,12 @@ export function validate(p: Project, assets: AssetInfo = {}): Diagnostic[] {
     }
     if (n.type === 'skinWardrobe') {
       const d = NODE_DEF_MAP.skinWardrobe
-      if (live.some((x) => x.type === 'skinZone') && valueOf(d, n.data, 'keyEnabled') && !valueOf(d, n.data, 'blockEnabled')) {
+      const zoneNode = live.find((x) => x.type === 'skinZone')
+      const isHintZone = zoneNode && valueOf(NODE_DEF_MAP.skinZone, zoneNode.data, 'mode') === 'hint'
+      if (isHintZone && valueOf(d, n.data, 'keyEnabled') && !valueOf(d, n.data, 'blockEnabled')) {
         out.push({ severity: 'warning', nodeId: n.id, message: t('Skin zones are in the mod, so the key only works inside a zone', 'มีพื้นที่เปลี่ยนสกินในม็อด ปุ่มจึงใช้ได้เฉพาะภายในพื้นที่') })
       }
-      if (!valueOf(d, n.data, 'keyEnabled') && !valueOf(d, n.data, 'blockEnabled') && !p.edges.some((e) => e.target === n.id && e.targetHandle === 'zones')) {
+      if (!valueOf(d, n.data, 'keyEnabled') && !valueOf(d, n.data, 'blockEnabled') && !zoneNode && !p.edges.some((e) => e.target === n.id && e.targetHandle === 'zones')) {
         out.push({ severity: 'warning', nodeId: n.id, message: t('No way to open the wardrobe: enable the key, the block or connect a zone', 'ไม่มีทางเปิดตู้เสื้อผ้า: เปิดปุ่ม บล็อก หรือเชื่อมพื้นที่') })
       }
     }

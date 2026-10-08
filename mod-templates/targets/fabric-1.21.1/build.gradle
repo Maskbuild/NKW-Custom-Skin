@@ -38,7 +38,8 @@ dependencies {
 processResources {
     filteringCharset = 'UTF-8'
     def props = [mod_id: project.mod_id, mod_name: project.mod_name,
-                 mod_version: project.mod_version, mod_description: project.mod_description]
+                 mod_version: project.mod_version, mod_description: project.mod_description,
+                 mod_authors: project.mod_authors, mod_license: project.mod_license]
     inputs.properties props
     filesMatching('fabric.mod.json') { expand props }
 }
